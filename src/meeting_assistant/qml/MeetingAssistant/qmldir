@@ -1,0 +1,4 @@
+module MeetingAssistant
+ChromeButton 1.0 ChromeButton.qml
+MarkdownBody 1.0 MarkdownBody.qml
+SpeakerMappingCard 1.0 SpeakerMappingCard.qml
