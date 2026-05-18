@@ -139,6 +139,14 @@ ApplicationWindow {
                 wrapMode: Text.Wrap
                 Layout.fillWidth: true
             }
+            Label {
+                visible: promptRunDialog.modeFull
+                text: qsTr("Tip: List participant names, domain jargon, or uncommon words you expect in this meeting. That vocabulary helps the model guess clearer spellings—especially for English terms.")
+                color: app.themeController.textMuted
+                font.pixelSize: 11
+                wrapMode: Text.Wrap
+                Layout.fillWidth: true
+            }
             ScrollView {
                 visible: promptRunDialog.modeFull
                 Layout.fillWidth: true
@@ -147,7 +155,6 @@ ApplicationWindow {
                 Basic.TextArea {
                     id: promptWhisperArea
                     wrapMode: TextArea.Wrap
-                    placeholderText: qsTr("Tip: Arabic context plus exact English terms to preserve (e.g. Kalman filter, REST API, Docker).")
                     color: app.themeController.textPrimary
                     background: Rectangle {
                         color: app.themeController.inputSurface

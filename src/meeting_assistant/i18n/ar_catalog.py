@@ -92,10 +92,11 @@ AR_UI: dict[tuple[str, str], str] = {
     ("Main", "📋 Copy path"): "📋 نسخ المسار",
     (
         "Main",
-        "Tip: Arabic context plus exact English terms to preserve (e.g. Kalman filter, REST API, Docker).",
+        "Tip: List participant names, domain jargon, or uncommon words you expect in this meeting. "
+        "That vocabulary helps the model guess clearer spellings—especially for English terms.",
     ):
-        "تلميح: جملة عربية سياقية ثم المصطلحات الإنجليزية بالحروف اللاتينية كما تريدها في النص "
-        "(مثل Kalman filter، REST API، Docker).",
+        "تلميح: اذكر أسماء المشاركين، مصطلحات المجال، أو الكلمات غير الشائعة التي تتوقعها في الاجتماع؛ "
+        "فذلك يساعد النموذج على تخمين تهجئة أوضح، خصوصًا للمفردات الإنجليزية.",
     ("Main", "📋 Copy data folder path"): "📋 نسخ مسار مجلد البيانات",
     ("Main", "📋 Copy meeting files folder"): "📋 نسخ مجلد ملفات الاجتماع",
     ("Main", "✖️ Close"): "✖️ إغلاق",
