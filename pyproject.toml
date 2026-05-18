@@ -1,0 +1,27 @@
+[project]
+name = "meeting-assistant"
+version = "0.0.0"
+description = "Local meeting transcription and summarization (PySide6 + WhisperX)"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["ruff>=0.8.0"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E4",
+    "E7",
+    "E9",
+    "F",
+    "I",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["meeting_assistant"]
