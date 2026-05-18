@@ -4,6 +4,48 @@ A **desktop application** 💻 for **offline-capable** meeting workflows: record
 
 The UI is **Qt Quick (QML)** on **PySide6** 🐍; Python owns persistence, AI adapters, and background work (`QThread` workers) so the interface stays responsive.
 
+---
+
+**📑 Table of contents**
+
+- [Additional documentation](#additional-documentation) — *links to `docs/` (project overview, SRS, diarization addendum).*
+- [Breaking changes](#breaking-changes) — *SQLite migrations, deprecated env paths, and artifact layout changes.*
+- [Project overview](#project-overview) — *sessions, audio, STT, summarization, artifacts, prompts, pipeline, UI language.*
+- [Models and services](#models-and-services) — *ASR, alignment, diarization, and Ollama summarization stack.*
+- [Dependencies](#dependencies) — *Python packages, external binaries, and GPU notes.*
+  - [Python](#dependencies-python) — *version, `pip install`, package roles, dev tools, tests.*
+  - [External tools](#dependencies-external-tools) — *Ollama, FFmpeg, optional GPU.*
+  - [PyTorch and CUDA](#dependencies-pytorch-and-cuda) — *CUDA-capable `torch`, verification command, mock mode.*
+- [Install](#install) — *clone, venv, dependencies, FFmpeg & Ollama, optional `.env`.*
+- [Configuration: `.env`](#configuration-env) — *how `python-dotenv` loads the repo-root `.env` and precedence vs the OS environment.*
+- [`constants.py` (summary)](#constants-py-summary) — *settings keys, defaults, enums, and extension lists.*
+- [Configuration (environment variables)](#configuration-environment-variables) — *full `MEETING_ASSISTANT_*` reference from `config.py`.*
+  - [Backend mode, debug, trace](#env-backend-mode-debug-trace) — *mock backend, debug UI, trace verbosity.*
+  - [Ollama](#env-ollama) — *base URL, host, port, model name.*
+  - [Hugging Face token (real transcription)](#env-hugging-face-token) — *token env vars and in-app Settings override.*
+  - [Whisper / WhisperX (ASR, alignment, device)](#env-whisper-whisperx) — *model, cache, language, beam size, device, batch, compute types.*
+  - [Data paths and outputs](#env-data-paths-and-outputs) — *`DATA_DIR`, SQLite path, forced output root, default folders.*
+  - [Mock tuning](#env-mock-tuning) — *artificial delays in mock mode.*
+  - [FFmpeg path and audio preprocessing](#env-ffmpeg-audio-preprocessing) — *decode path, prep chain, loudnorm, timeouts.*
+- [Where configuration lives (layers)](#where-configuration-lives-layers) — *env vs SQLite vs per-message prompts vs code constants.*
+- [How to run](#how-to-run) — *`python main.py`, prerequisites checklist, mock-mode one-liner.*
+- [How to use (typical flow)](#how-to-use-typical-flow) — *sessions, record/import, prompts, pipeline, artifacts, summarize-only, stateless LLM.*
+- [Current pipeline (detail)](#current-pipeline-detail) — *prepare → transcribe → persist → summarize → persist; mock behavior.*
+- [Prompt composition](#prompt-composition) — *how Whisper `initial_prompt` and LLM system/user messages are built.*
+  - [Arabic meetings with English technical terms](#arabic-meetings-with-english-technical-terms) — *glossary, `WHISPER_LANGUAGE`, alignment language, jargon normalize.*
+- [In-app settings (persisted)](#in-app-settings-persisted) — *what is stored in SQLite when not in mock mode.*
+- [UI language, RTL, and translations](#ui-language-rtl-and-translations) — *toolbar locale, RTL, catalog and optional `.qm`.*
+- [Architecture (high level)](#architecture-high-level) — *QML facade, ports, adapters, workers, composition root.*
+- [Project structure](#project-structure) — *repository tree (`src`, `tests`, `docs`, scripts).*
+- [Development](#development) — *`PYTHONPATH`, `pytest`, optional Ruff.*
+- [Troubleshooting](#troubleshooting) — *QML style, Ollama host, cache, GPU, TorchCodec, HF token, pytest imports.*
+- [License](#license) — *Apache 2.0.*
+- [Contributing](#contributing) — *keeping `config.py`, SRS, and README aligned.*
+
+---
+
+<a id="additional-documentation"></a>
+
 **📚 More documentation**
 
 - 📄 [docs/PROJECT_DESCRIPTION.md](docs/PROJECT_DESCRIPTION.md) — short consultation-ready overview (purpose, stack, constraints).
@@ -12,12 +54,16 @@ The UI is **Qt Quick (QML)** on **PySide6** 🐍; Python owns persistence, AI ad
 
 ---
 
+<a id="breaking-changes"></a>
+
 ## ⚠️ Breaking changes
 
 - **🗄️ SQLite:** Deprecated **`app_settings`** keys (`global_default_prompt`, `prompt_bundle_v2_applied`) are **deleted on startup**. The legacy **`sessions.chat_prompt`** column is **dropped** when SQLite supports `DROP COLUMN` (3.35+). Older DB files missing newer message/session columns still get the usual **`ALTER TABLE … ADD COLUMN`** pass so the app can open them. Prefer a **fresh** `meetings.db` when you want a completely clean file; back up first if you need history.
 - **📁 `MEETING_ASSISTANT_TRANSCRIPTS`** is no longer supported. **New runs** write session audio and `.txt` artifacts (transcript and summary) under **`<meeting_output_root>/sessions/<artifacts_slug>/`** only. The types in `resolve_meeting_output_dirs` still expose logical `recordings/`, `transcripts/`, and `summaries/` under the output root (e.g. for tests and older helpers), but the GUI pipeline uses the per-session folder above—not a root-level `transcripts/` directory for those files.
 
 ---
+
+<a id="project-overview"></a>
 
 ## 📌 Project overview
 
@@ -38,6 +84,8 @@ On **Windows** 🪟, `main.py` calls **`ensure_nvidia_pip_dll_directories()`** s
 
 ---
 
+<a id="models-and-services"></a>
+
 ## 🤖 Models and services
 
 | Piece | Technology | Notes |
@@ -49,7 +97,11 @@ On **Windows** 🪟, `main.py` calls **`ensure_nvidia_pip_dll_directories()`** s
 
 ---
 
+<a id="dependencies"></a>
+
 ## 📦 Dependencies
+
+<a id="dependencies-python"></a>
 
 ### 🐍 Python
 
@@ -74,11 +126,15 @@ pip install -r requirements.txt
 
 **✅ Tests:** `pytest` is not pinned in `requirements.txt`; `pip install pytest` to run the suite. Use **`PYTHONPATH`** pointing at **`src`** (see [Development](#development)).
 
+<a id="dependencies-external-tools"></a>
+
 ### 🔧 External tools
 
 - 🦙 **[Ollama](https://ollama.com/)** — local LLM server (`/api/chat`).
 - 🎬 **[FFmpeg](https://ffmpeg.org/)** — required for real transcription (decode + optional pre-ASR prep). Resolution: **`MEETING_ASSISTANT_FFMPEG_PATH`**, `ffmpeg` next to the app executable, then **`PATH`**. Example (Windows): `winget install ffmpeg`.
 - 🖥️ **GPU (optional)** — CUDA improves WhisperX throughput; CPU fallback when acceleration fails. Install a **CUDA-enabled PyTorch** into the **same** venv if you need GPU (see below).
+
+<a id="dependencies-pytorch-and-cuda"></a>
 
 ### 🔥 PyTorch and CUDA
 
@@ -103,6 +159,8 @@ Pinned **`nvidia-*`** wheels do not replace a CUDA-capable **torch** wheel.
 **🧪 Mock mode:** set `MEETING_ASSISTANT_MOCK=1` — FFmpeg is not required.
 
 ---
+
+<a id="install"></a>
 
 ## 🚀 Install
 
@@ -143,6 +201,8 @@ If `python-dotenv` is missing, `.env` is skipped (the app still reads the real e
 
 ---
 
+<a id="constants-py-summary"></a>
+
 ## 📄 `src/meeting_assistant/core/constants.py` (summary)
 
 These are stable identifiers and defaults used across the app (see the file for full strings).
@@ -165,9 +225,13 @@ These are stable identifiers and defaults used across the app (see the file for 
 
 ---
 
+<a id="configuration-environment-variables"></a>
+
 ## 🎛️ Configuration (environment variables)
 
 All variables below are read in **`src/meeting_assistant/config.py`**. Defaults match the current codebase.
+
+<a id="env-backend-mode-debug-trace"></a>
 
 ### 🧩 Backend mode, debug, trace
 
@@ -177,6 +241,8 @@ All variables below are read in **`src/meeting_assistant/config.py`**. Defaults 
 | `MEETING_ASSISTANT_DEBUG` | `0` | Extra debug UI where implemented (`DEBUG_UI`). |
 | `MEETING_ASSISTANT_TRACE_LEVEL` | `0` | Terminal trace verbosity **0–3** (0 = default logging; 1 = main pipeline; 2 = sub-steps/I/O; 3 = fine-grained). If set, overrides `MEETING_ASSISTANT_VERBOSE`. |
 | `MEETING_ASSISTANT_VERBOSE` | *(unset)* | Alias for the same **0–3** scale as `TRACE_LEVEL` when `TRACE_LEVEL` is unset. |
+
+<a id="env-ollama"></a>
 
 ### 🦙 Ollama
 
@@ -189,6 +255,8 @@ All variables below are read in **`src/meeting_assistant/config.py`**. Defaults 
 
 If `MEETING_ASSISTANT_OLLAMA_BASE_URL` is unset, the client uses `http://{OLLAMA_HOST}:{OLLAMA_PORT}`.
 
+<a id="env-hugging-face-token"></a>
+
 ### 🤗 Hugging Face token (real transcription)
 
 The process reads the **first non-empty** value among (after `.env` load):
@@ -196,6 +264,8 @@ The process reads the **first non-empty** value among (after `.env` load):
 `MEETING_ASSISTANT_HF_TOKEN`, `HF_ACCESS_TOKEN`, `HUGGING_FACE_HUB_TOKEN`, `HF_TOKEN`.
 
 In-app **Settings** can override env when the stored token is non-empty (see `resolve_hf_access_token` in [`src/meeting_assistant/services/hf_token.py`](src/meeting_assistant/services/hf_token.py)).
+
+<a id="env-whisper-whisperx"></a>
 
 ### 🎙️ Whisper / WhisperX (ASR, alignment, device)
 
@@ -218,6 +288,8 @@ In-app **Settings** can override env when the stored token is non-empty (see `re
 | `MEETING_ASSISTANT_WHISPER_COMPUTE_TYPES` | *(built-in chain)* | Comma-separated CTranslate2 compute types to try in order (e.g. `float16,int8`). |
 | `MEETING_ASSISTANT_WHISPER_MIN_BIN_BYTES` | *(per-model table)* | Override minimum `model.bin` size for cache completeness checks. |
 
+<a id="env-data-paths-and-outputs"></a>
+
 ### 📂 Data paths and outputs
 
 | Variable | Default | Meaning |
@@ -233,11 +305,15 @@ In-app **Settings** can override env when the stored token is non-empty (see `re
 
 **Default meeting outputs** when neither env nor in-app override applies: **`{PROJECT_ROOT}/meeting_outputs`** with per-session folders under **`sessions/`**.
 
+<a id="env-mock-tuning"></a>
+
 ### 🎭 Mock tuning
 
 | Variable | Default | Meaning |
 |----------|---------|---------|
 | `MEETING_ASSISTANT_MOCK_DELAY` | `0.45` | Artificial delay (seconds) in mock transcription/summarization. |
+
+<a id="env-ffmpeg-audio-preprocessing"></a>
 
 ### 🎬 FFmpeg path and audio preprocessing
 
@@ -263,6 +339,8 @@ Preprocessing logs use the logger **`meeting_assistant.audio_prep`** and the **`
 
 ---
 
+<a id="where-configuration-lives-layers"></a>
+
 ## 🧱 Where configuration lives (layers)
 
 | Layer | Location | What it controls |
@@ -275,6 +353,8 @@ Preprocessing logs use the logger **`meeting_assistant.audio_prep`** and the **`
 | **📂 Output layout** | [`src/meeting_assistant/services/output_paths.py`](src/meeting_assistant/services/output_paths.py) | Resolution of meeting file paths vs env overrides. |
 
 ---
+
+<a id="how-to-run"></a>
 
 ## ▶️ How to run
 
@@ -302,6 +382,8 @@ python main.py
 
 ---
 
+<a id="how-to-use-typical-flow"></a>
+
 ## 📖 How to use (typical flow)
 
 1. 💬 **Create or open a session** in the sidebar.
@@ -316,6 +398,8 @@ There is **no cross-session LLM memory** 📭: each summary uses only that run�
 
 ---
 
+<a id="current-pipeline-detail"></a>
+
 ## 🔄 Current pipeline (detail)
 
 1. 🧩 **Prepare** — Resolve session output folder under `sessions/`, build prompt snapshot (global + per-recording).
@@ -328,6 +412,8 @@ There is **no cross-session LLM memory** 📭: each summary uses only that run�
 
 ---
 
+<a id="prompt-composition"></a>
+
 ## 💬 Prompt composition
 
 Merged in [`src/meeting_assistant/services/prompt_composition.py`](src/meeting_assistant/services/prompt_composition.py); accessors in [`src/meeting_assistant/services/prompts.py`](src/meeting_assistant/services/prompts.py).
@@ -335,6 +421,8 @@ Merged in [`src/meeting_assistant/services/prompt_composition.py`](src/meeting_a
 - **🎙️ Whisper `initial_prompt`** — Global Whisper context + per-recording Whisper context (suffix preserved if over ~1800 characters).
 - **🦙 LLM system** — Global LLM system + per-recording summarization instructions.
 - **📄 LLM user** — Transcript text only.
+
+<a id="arabic-meetings-with-english-technical-terms"></a>
 
 ### 🌍 Arabic meetings with English technical terms
 
@@ -345,11 +433,15 @@ Merged in [`src/meeting_assistant/services/prompt_composition.py`](src/meeting_a
 
 ---
 
+<a id="in-app-settings-persisted"></a>
+
 ## ⚙️ In-app settings (persisted)
 
 When not in mock mode: global LLM system prompt, global Whisper context, optional meeting files folder, HF token, UI language — stored in SQLite (`app_settings` keys from `constants.py`). Edited via **`app.settingsController`** and **`app.localeController`** in QML.
 
 ---
+
+<a id="ui-language-rtl-and-translations"></a>
 
 ## 🌐 UI language, RTL, and translations
 
@@ -361,6 +453,8 @@ When not in mock mode: global LLM system prompt, global Whisper context, optiona
 
 ---
 
+<a id="architecture-high-level"></a>
+
 ## 🏗️ Architecture (high level)
 
 - **UI:** 🖼️ QML [`src/meeting_assistant/qml/Main.qml`](src/meeting_assistant/qml/Main.qml) → context property **`app`** (`AppFacade`).
@@ -370,6 +464,8 @@ When not in mock mode: global LLM system prompt, global Whisper context, optiona
 - **Composition:** 🧩 [`src/meeting_assistant/app_context.py`](src/meeting_assistant/app_context.py) builds the facade after `QQmlApplicationEngine` so translators install before/during QML load.
 
 ---
+
+<a id="project-structure"></a>
 
 ## 📁 Project structure
 
@@ -443,6 +539,8 @@ Optional: `pip install '.[dev]'` then `ruff check src tests`.
 
 ---
 
+<a id="troubleshooting"></a>
+
 ## 🔧 Troubleshooting
 
 - **QML on Windows:** `main.py` sets `QT_QUICK_CONTROLS_STYLE=Basic` for consistent styling 🎨.
@@ -455,11 +553,15 @@ Optional: `pip install '.[dev]'` then `ruff check src tests`.
 
 ---
 
+<a id="license"></a>
+
 ## 📜 License
 
 This project is licensed under the **Apache License 2.0** 📜 — see [LICENSE](LICENSE).
 
 ---
+
+<a id="contributing"></a>
 
 ## 🤝 Contributing
 
