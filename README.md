@@ -48,6 +48,7 @@ The UI is **Qt Quick (QML)** on **PySide6** 🐍; Python owns persistence, AI ad
 
 **📚 More documentation**
 
+- 🇸🇦 [docs/INSTALLATION_AR.md](docs/INSTALLATION_AR.md) — دليل عربي مفصّل للتثبيت ونقل المشروع إلى حاسوب آخر (Windows، Whisper، Ollama، WSL).
 - 📄 [docs/PROJECT_DESCRIPTION.md](docs/PROJECT_DESCRIPTION.md) — short consultation-ready overview (purpose, stack, constraints).
 - 📋 [docs/SRS.md](docs/SRS.md) — Software Requirements Specification (intent and architecture).
 - 🎤 [docs/Feature SRS - Speaker Diarization and Alignment.md](docs/Feature%20SRS%20-%20Speaker%20Diarization%20and%20Alignment.md) — diarization and alignment addendum.
