@@ -74,6 +74,7 @@ flowchart LR
 | كود الإعداد | `src/meeting_assistant/config.py` | القيم الافتراضية وقراءة المتغيرات |
 | بيانات التطبيق | `%LOCALAPPDATA%\MeetingAssistant\` على Windows | قاعدة بيانات `meetings.db` (الجلسات والإعدادات المحفوظة من الواجهة) |
 | ذاكرة نموذج Whisper | `{جذر_المشروع}/models/whisper/` | أوزان faster-whisper (CT2) — حوالي 2.6 غيغابايت لنموذج `large-v3` |
+| جذر مخرجات الاجتماعات (اختياري) | متغير `MEETING_ASSISTANT_OUTPUT_ROOT` في `.env` | يُقرأ في `src/meeting_assistant/services/output_paths.py`؛ إن لم يُضبط، الافتراضي `{جذر_المشروع}/meeting_outputs/` مع مجلدات فرعية `sessions/{اسم_الجلسة}/` |
 
 **المسار الافتراضي لنموذج Whisper** (من `config.py`):
 
@@ -111,7 +112,7 @@ Z:\Abo Farok\meeting_summary\models\whisper
 | **الترخيص** | `LICENSE` | Apache 2.0 | **نعم** |
 | **بيئة Python** | `.venv/` | الحزم المثبتة محلياً | **لا** — أعد إنشاءها على الجهاز الجديد |
 | **مخلفات Python** | `__pycache__/`, `*.pyc` | ملفات مؤقتة | **لا** — تُنشأ تلقائياً |
-| **مخرجات الاجتماعات** | `meeting_outputs/` | صوت، نصوص، ملخصات لكل جلسة | **اختياري** — انقله إن أردت الاحتفاظ بالملفات |
+| **مخرجات الاجتماعات** | `meeting_outputs/sessions/` | صوت، نصوص، ملخصات لكل جلسة تحت مجلد فرعي باسم الجلسة | **اختياري** — انقله إن أردت الاحتفاظ بالملفات |
 | **نموذج Whisper** | `models/whisper/` | أوزان CT2 كبيرة الحجم | **اختياري** — انقله لتوفير إعادة التنزيل |
 | **قاعدة البيانات** | `%LOCALAPPDATA%\MeetingAssistant\meetings.db` | جلسات وإعدادات الواجهة | **اختياري** — انقله للاحتفاظ بالتاريخ |
 | **ذاكرة اختبار** | `.pytest_cache/`, `htmlcov/` | نتائج اختبارات محلية | **لا** |
@@ -132,6 +133,7 @@ meeting_summary/                 ← جذر المشروع (يجب أن يحتو
 ├── models/
 │   └── whisper/                 ← نموذج Whisper (يُنشأ عند التنزيل)
 ├── meeting_outputs/             ← مخرجات الاجتماعات (يُنشأ عند الاستخدام)
+│   └── sessions/                ← مجلد فرعي لكل جلسة (صوت، تفريغ، ملخص)
 ├── src/
 │   └── meeting_assistant/       ← كود التطبيق
 │       ├── adapters/            ← SQLite, WhisperX, Ollama
@@ -1088,7 +1090,9 @@ pytest
 | [src/meeting_assistant/config.py](../src/meeting_assistant/config.py) | مصدر الحقيقة للقيم الافتراضية |
 | [docs/PROJECT_DESCRIPTION.md](PROJECT_DESCRIPTION.md) | نظرة عامة على المشروع |
 | [docs/SRS.md](SRS.md) | مواصفات المتطلبات |
+| [docs/Feature SRS - Speaker Diarization and Alignment.md](Feature%20SRS%20-%20Speaker%20Diarization%20and%20Alignment.md) | ملحق التفريغ متعدد المتحدثين والمحاذاة |
+| [CONTRIBUTING.md](../CONTRIBUTING.md) | إرشادات المساهمة ومزامنة الوثائق مع الكود |
 
 ---
 
-**آخر تحديث:** يتوافق هذا الدليل مع هيكل المستودع الحالي (`meeting-assistant`، PySide6 + WhisperX + Ollama). عند تغيير الإصدارات أو المسارات في الكود، راجع `config.py` و `README.md` للتأكد من التطابق.
+**آخر تحديث:** 2026-06-23 — يتوافق هذا الدليل مع هيكل المستودع الحالي (PySide6 + WhisperX + Ollama). عند تغيير الإصدارات أو المسارات في الكود، راجع `config.py` و `README.md` و [CONTRIBUTING.md](../CONTRIBUTING.md) للتأكد من التطابق.

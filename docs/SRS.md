@@ -4,6 +4,8 @@
 
 **Operational reference:** For environment variables, defaults, and runbooks, see [README.md](../README.md). This SRS states product intent and architecture; the README stays aligned with `src/meeting_assistant/config.py` and deployment details.
 
+**Related docs:** [PROJECT_DESCRIPTION.md](PROJECT_DESCRIPTION.md) · [INSTALLATION_AR.md](INSTALLATION_AR.md) · [Feature SRS - Speaker Diarization and Alignment.md](Feature%20SRS%20-%20Speaker%20Diarization%20and%20Alignment.md)
+
 ---
 
 ### 1. Introduction
@@ -46,7 +48,8 @@ A **mock backend** (environment-controlled) may substitute stub transcription, s
 * **Database:** Single SQLite file (e.g. under the configured app data directory unless overridden).
 * **`sessions`:** `id` (primary key), `title`, `created_at`, **`artifacts_slug`** (unique folder name under the meeting output tree).
 * **`messages`:** `id`, `session_id`, `role` (e.g. user / assistant / system), `content`, `file_path`, `created_at`, `system_kind` (for system banner severity), **`recording_llm_instructions`** and **`recording_whisper_context`** (optional per-recording prompt layers; see §3.3), **`assistant_kind`** (e.g. transcript vs summary for assistant bubbles).
-* **`app_settings`:** Key/value rows for global LLM system text, global Whisper transcription context, optional meeting output root, **`ui_language`** (`ar` / `en`), Hugging Face token for the real WhisperX path (pyannote / diarization), and related keys documented in the README.
+* **`app_settings`:** Key/value rows for global LLM system text (`global_llm_system_prompt`), global Whisper transcription context (`global_whisper_context`), optional meeting output root (`meeting_output_root`), **`ui_language`** (`ar` / `en`), Hugging Face token (`hf_access_token`) for the real WhisperX path, and related keys documented in the README. Deprecated keys (`global_default_prompt`, `prompt_bundle_v2_applied`) are deleted on startup.
+* **`session_speakers`:** `id` (INTEGER PRIMARY KEY AUTOINCREMENT), `session_id` (TEXT, FOREIGN KEY to `sessions(id)` ON DELETE CASCADE), `speaker_key` (TEXT, e.g. `SPEAKER_00`), `speaker_name` (TEXT, user display name), UNIQUE(`session_id`, `speaker_key`). See [Feature SRS - Speaker Diarization and Alignment.md](Feature%20SRS%20-%20Speaker%20Diarization%20and%20Alignment.md).
 
 ---
 
@@ -69,7 +72,7 @@ A **mock backend** (environment-controlled) may substitute stub transcription, s
   * **Global Whisper context** — optional text passed as Whisper `initial_prompt` to bias transcription.
   * **Optional meeting files folder** — overrides default output root unless superseded by environment (see README).
 * **Per-recording overrides:** For each **user message that carries an audio file**, the user may supply optional **recording-specific LLM instructions** and **recording-specific Whisper context**. These are stored on that message row and composed at pipeline time with the global strings (see `src/meeting_assistant/services/prompt_composition.py`). The LLM **user** message for summarization is **transcript text only**; instructions live in the system role.
-* **Breaking upgrades:** Deprecated **`app_settings`** keys and the legacy **`sessions.chat_prompt`** column are removed on startup (see README *Breaking changes*). A **fresh SQLite file** is still recommended if the on-disk layout predates tables this app expects.
+* **Breaking upgrades:** Deprecated **`app_settings`** keys (`global_default_prompt`, `prompt_bundle_v2_applied`) and the legacy **`sessions.chat_prompt`** column are removed on startup (see README *Breaking changes*). A **fresh SQLite file** is still recommended if the on-disk layout predates tables this app expects.
 
 **3.4 User interface language**
 
@@ -80,8 +83,9 @@ A **mock backend** (environment-controlled) may substitute stub transcription, s
 
 **3.5 AI processing pipeline execution**
 
-* **Phase 1 — Transcription:** On audio input, run **WhisperX** with composed `initial_prompt`; show a transcribing state; show transcript in chat; write a `.txt` transcript under the configured output tree; allow opening the file from the UI where implemented. When the optional **`MEETING_ASSISTANT_TRANSCRIPT_JARGON_NORMALIZE`** flag is enabled (see README), the application may insert an additional **Ollama** pass after ASR to normalize obvious Arabized English technical terms using the same composed Whisper context as a glossary; the persisted transcript reflects successful normalization.
-* **Phase 2 — Summarization:** Send Ollama a **system** message built from global + per-recording LLM instructions and a **user** message that is the transcript only; show a generating state; persist summary `.txt` and show the summary in chat.
+* **Phase 1 — Transcription:** On audio input, run **WhisperX** with composed `initial_prompt`; show a transcribing state; show transcript in chat; write a `.txt` transcript under the configured output tree; allow opening the file from the UI where implemented. When the optional **`MEETING_ASSISTANT_TRANSCRIPT_JARGON_NORMALIZE`** flag is enabled (see README), the application may insert an additional **Ollama** pass after ASR to normalize obvious Arabized English technical terms using the same composed Whisper context as a glossary; the persisted transcript reflects successful normalization. **`TranscriptionWorker`** emits **`finished_raw(transcript, txt_path, speaker_keys)`** and does not run summarization.
+* **Speaker mapping (intercept):** When one or more speaker keys are present, the pipeline **halts** after Phase 1. The UI collects optional `SPEAKER_XX` → display name mappings; on confirm, the transcript file and **`session_speakers`** rows are updated (see Feature SRS). When there are no speaker keys, summarization starts immediately.
+* **Phase 2 — Summarization:** **`SummarizeWorker`** sends Ollama a **system** message built from global + per-recording LLM instructions and a **user** message that is the transcript only; show a generating state; persist summary `.txt` and show the summary in chat.
 * **Re-run summary:** From an existing transcript, summarization may run without re-transcription (see README).
 
 ---
@@ -105,4 +109,4 @@ Heavy work (Whisper load/transcribe, Ollama HTTP) must not block the QML GUI thr
 
 ### 5. Traceability
 
-When behavior changes, update this SRS for intent and [README.md](../README.md) for exact defaults, env vars, and file layout so they stay consistent with `src/meeting_assistant/`.
+When behavior changes, update this SRS for intent and [README.md](../README.md) for exact defaults, env vars, and file layout so they stay consistent with `src/meeting_assistant/`. See [CONTRIBUTING.md](../CONTRIBUTING.md) for the full sync matrix and PR checklist.

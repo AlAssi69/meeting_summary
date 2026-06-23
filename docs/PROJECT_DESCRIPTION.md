@@ -48,7 +48,9 @@ Give users a **single place** to: manage **sessions** (chat-style history), **re
 
 - **[README.md](../README.md)** — setup, env vars, speech cache, quick start.
 - **[SRS.md](SRS.md)** — product/architecture requirements aligned with implementation.
+- **[INSTALLATION_AR.md](INSTALLATION_AR.md)** — Arabic Windows installation and migration guide.
 - **[Feature SRS - Speaker Diarization and Alignment.md](Feature SRS - Speaker Diarization and Alignment.md)** — addendum for diarization/alignment (implementation status at top).
+- **[CONTRIBUTING.md](../CONTRIBUTING.md)** — development setup, documentation sync rules, PR checklist.
 
 ## Likely consultation topics (context)
 
@@ -59,4 +61,4 @@ Give users a **single place** to: manage **sessions** (chat-style history), **re
 
 ---
 
-Point consultants at **[README.md](../README.md)** and **[SRS.md](SRS.md)** for full detail and environment defaults.
+Point consultants at **[README.md](../README.md)** and **[SRS.md](SRS.md)** for full detail and environment defaults. For Arabic Windows setup, see **[INSTALLATION_AR.md](INSTALLATION_AR.md)**.
