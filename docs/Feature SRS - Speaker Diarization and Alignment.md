@@ -2,6 +2,8 @@ Here is the Feature Specification (SRS Addendum) for the Speaker Diarization and
 
 This document is designed to act as an extension to existing `SRS.md`, adhering to established architectural patterns (Ports/Adapters, QThread workers, and modularity).
 
+**Related docs:** [README.md](../README.md) · [SRS.md](SRS.md) · [PROJECT_DESCRIPTION.md](PROJECT_DESCRIPTION.md) · [INSTALLATION_AR.md](INSTALLATION_AR.md)
+
 ---
 
 ## Implementation status

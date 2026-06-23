@@ -40,7 +40,7 @@ The UI is **Qt Quick (QML)** on **PySide6** 🐍; Python owns persistence, AI ad
 - [Development](#development) — *`PYTHONPATH`, `pytest`, optional Ruff.*
 - [Troubleshooting](#troubleshooting) — *QML style, Ollama host, cache, GPU, TorchCodec, HF token, pytest imports.*
 - [License](#license) — *Apache 2.0.*
-- [Contributing](#contributing) — *keeping `config.py`, SRS, and README aligned.*
+- [Contributing](#contributing) — *see [CONTRIBUTING.md](CONTRIBUTING.md) for sync rules and PR checklist.*
 
 ---
 
@@ -52,6 +52,7 @@ The UI is **Qt Quick (QML)** on **PySide6** 🐍; Python owns persistence, AI ad
 - 📄 [docs/PROJECT_DESCRIPTION.md](docs/PROJECT_DESCRIPTION.md) — short consultation-ready overview (purpose, stack, constraints).
 - 📋 [docs/SRS.md](docs/SRS.md) — Software Requirements Specification (intent and architecture).
 - 🎤 [docs/Feature SRS - Speaker Diarization and Alignment.md](docs/Feature%20SRS%20-%20Speaker%20Diarization%20and%20Alignment.md) — diarization and alignment addendum.
+- 🤝 [CONTRIBUTING.md](CONTRIBUTING.md) — development setup, documentation sync rules, PR checklist.
 
 ---
 
@@ -217,7 +218,7 @@ These are stable identifiers and defaults used across the app (see the file for 
 | **`SETTINGS_KEY_MEETING_OUTPUT_ROOT`** | Optional custom meeting output root (unless overridden by `MEETING_ASSISTANT_OUTPUT_ROOT`). |
 | **`SETTINGS_KEY_UI_LANGUAGE`** | `ui_language`: `ar` or `en`. |
 | **`SETTINGS_KEY_HF_ACCESS_TOKEN`** | HF token stored in Settings (preferred over env when non-empty in resolvers). |
-| **`SETTINGS_DEPRECATED_SQLITE_KEYS`** | Legacy keys stripped on startup if present. |
+| **`SETTINGS_DEPRECATED_SQLITE_KEYS`** | Legacy keys stripped on startup if present: `global_default_prompt`, `prompt_bundle_v2_applied`. |
 | **`DEFAULT_UI_LANGUAGE`** | First-run UI chrome default: **`ar`**. |
 | **`DEFAULT_SUMMARY_PROMPT`** | Default Arabic structured summarization instructions (LLM system). |
 | **`DEFAULT_WHISPER_CONTEXT`** | Default domain / glossary bias for Whisper. |
@@ -230,7 +231,7 @@ These are stable identifiers and defaults used across the app (see the file for 
 
 ## 🎛️ Configuration (environment variables)
 
-All variables below are read in **`src/meeting_assistant/config.py`**. Defaults match the current codebase.
+Most variables below are read in **`src/meeting_assistant/config.py`**. **`MEETING_ASSISTANT_OUTPUT_ROOT`** is read in **`src/meeting_assistant/services/output_paths.py`** (meeting artifact root precedence). Defaults match the current codebase.
 
 <a id="env-backend-mode-debug-trace"></a>
 
@@ -297,7 +298,7 @@ In-app **Settings** can override env when the stored token is non-empty (see `re
 |----------|---------|---------|
 | `MEETING_ASSISTANT_DATA_DIR` | OS-specific (see below) | App data root; SQLite lives here unless `MEETING_ASSISTANT_DB` overrides. |
 | `MEETING_ASSISTANT_DB` | `{DATA_DIR}/meetings.db` | SQLite path. |
-| `MEETING_ASSISTANT_OUTPUT_ROOT` | *(unset)* | If set, **forces** meeting output root; GUI sessions use `sessions/` beneath it (overrides in-app custom folder). |
+| `MEETING_ASSISTANT_OUTPUT_ROOT` | *(unset)* | If set, **forces** meeting output root; GUI sessions use `sessions/` beneath it (overrides in-app custom folder). Read in **`output_paths.py`**, not `config.py`. |
 
 **Default `DATA_DIR`** when `MEETING_ASSISTANT_DATA_DIR` is unset (`_local_data_dir()` in `config.py`):
 
@@ -365,6 +366,8 @@ From the repository root (directory containing **`main.py`**):
 python main.py
 ```
 
+On **Windows**, you can use **`run.ps1`** or **`run.bat`** instead — they activate **`.venv`** if present, then run **`main.py`**.
+
 `main.py` adds `src` to `sys.path` and loads QML from `src/meeting_assistant/qml/`.
 
 **✅ Checklist (real backend, default):**
@@ -404,8 +407,8 @@ There is **no cross-session LLM memory** 📭: each summary uses only that run�
 ## 🔄 Current pipeline (detail)
 
 1. 🧩 **Prepare** — Resolve session output folder under `sessions/`, build prompt snapshot (global + per-recording).
-2. 🎙️ **Transcribe** — WhisperX with `initial_prompt` from composed Whisper context. Optional **`MEETING_ASSISTANT_TRANSCRIPT_JARGON_NORMALIZE=1`**: extra Ollama pass using the same glossary text.
-3. 💾 **Persist transcript** — `.txt` with `SPEAKER_XX` lines when applicable; speaker **Confirm** rewrites file and SQLite `session_speakers`.
+2. 🎙️ **Transcribe** — **`TranscriptionWorker`**: WhisperX with `initial_prompt` from composed Whisper context. Optional **`MEETING_ASSISTANT_TRANSCRIPT_JARGON_NORMALIZE=1`**: extra Ollama pass using the same glossary text. Emits **`finished_raw(transcript, txt_path, speaker_keys)`**.
+3. 👥 **Speaker intercept (when keys exist)** — Pipeline **pauses**; optional display-name mapping in the chat UI. **Confirm** rewrites the transcript `.txt` and SQLite **`session_speakers`**, then starts **`SummarizeWorker`**. No keys → summarization runs immediately.
 4. 🦙 **Summarize** — Ollama: **system** = composed LLM prompt; **user** = transcript only.
 5. 📝 **Persist summary** — `.txt` + chat bubble.
 
@@ -473,6 +476,8 @@ When not in mock mode: global LLM system prompt, global Whisper context, optiona
 ```text
 meeting_summary/
 ├── main.py                          # Entry: DLL paths (Windows), logging, QML, context property `app`
+├── run.ps1                          # PowerShell launcher (activates .venv, runs main.py)
+├── run.bat                          # Windows batch launcher
 ├── requirements.txt                 # Runtime pip dependencies
 ├── pyproject.toml                   # Ruff, requires-python, optional dev extras
 ├── LICENSE                          # Apache License 2.0
@@ -480,8 +485,10 @@ meeting_summary/
 ├── docs/
 │   ├── SRS.md
 │   ├── PROJECT_DESCRIPTION.md
+│   ├── INSTALLATION_AR.md
 │   └── Feature SRS - Speaker Diarization and Alignment.md
 ├── README.md
+├── CONTRIBUTING.md                # Dev setup, doc sync rules, PR checklist
 ├── scripts/
 │   ├── audit_sqlite_privacy.py
 │   └── audit_repo_before_github.py
@@ -566,4 +573,4 @@ This project is licensed under the **Apache License 2.0** 📜 — see [LICENSE]
 
 ## 🤝 Contributing
 
-Issues and pull requests are welcome 🙌. When changing behavior, update **`config.py`**, **`docs/SRS.md`**, **`docs/PROJECT_DESCRIPTION.md`** (if the high-level story changes), and this README so they stay aligned.
+Issues and pull requests are welcome. See **[CONTRIBUTING.md](CONTRIBUTING.md)** for development setup, documentation sync rules, and the PR checklist.

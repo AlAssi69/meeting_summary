@@ -19,7 +19,11 @@ class MeetingOutputDirs:
 
 
 def resolve_meeting_output_dirs(repo: SessionRepository) -> MeetingOutputDirs:
-    """Pick root: MEETING_ASSISTANT_OUTPUT_ROOT > repo setting > project default."""
+    """Pick root: MEETING_ASSISTANT_OUTPUT_ROOT > repo setting > project default.
+
+    ``MEETING_ASSISTANT_OUTPUT_ROOT`` is documented in README.md (env tables) and
+    ``.env.example``; it is read here, not in ``config.py``.
+    """
     env_root = os.environ.get("MEETING_ASSISTANT_OUTPUT_ROOT", "").strip()
     if env_root:
         root = Path(env_root).expanduser().resolve()
