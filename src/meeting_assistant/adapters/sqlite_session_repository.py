@@ -5,7 +5,9 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+from meeting_assistant import config
 from meeting_assistant.core.constants import (
+    DEFAULT_SPEAKER_DIARIZATION_ENABLED,
     DEFAULT_SUMMARY_PROMPT,
     DEFAULT_UI_LANGUAGE,
     DEFAULT_WHISPER_CONTEXT,
@@ -14,6 +16,7 @@ from meeting_assistant.core.constants import (
     SETTINGS_KEY_GLOBAL_WHISPER_CONTEXT,
     SETTINGS_KEY_HF_ACCESS_TOKEN,
     SETTINGS_KEY_MEETING_OUTPUT_ROOT,
+    SETTINGS_KEY_SPEAKER_DIARIZATION_ENABLED,
     SETTINGS_KEY_UI_LANGUAGE,
     MessageRole,
 )
@@ -107,6 +110,18 @@ def _ensure_hf_access_token_setting(conn: sqlite3.Connection) -> None:
         )
 
 
+def _ensure_speaker_diarization_setting(conn: sqlite3.Connection) -> None:
+    has_key = conn.execute(
+        "SELECT 1 FROM app_settings WHERE key = ?", (SETTINGS_KEY_SPEAKER_DIARIZATION_ENABLED,)
+    ).fetchone()
+    if not has_key:
+        default_on = config.SPEAKER_DIARIZATION_ENABLED
+        conn.execute(
+            "INSERT INTO app_settings (key, value) VALUES (?, ?)",
+            (SETTINGS_KEY_SPEAKER_DIARIZATION_ENABLED, "1" if default_on else "0"),
+        )
+
+
 def _ensure_session_speakers_table(conn: sqlite3.Connection) -> None:
     conn.execute(
         """
@@ -196,6 +211,7 @@ class SqliteSessionRepository(SessionRepository):
             _ensure_meeting_output_root_setting(conn)
             _ensure_ui_language_setting(conn)
             _ensure_hf_access_token_setting(conn)
+            _ensure_speaker_diarization_setting(conn)
             _ensure_session_speakers_table(conn)
         self._backfill_missing_artifacts_slugs()
 
@@ -460,6 +476,29 @@ class SqliteSessionRepository(SessionRepository):
                 "INSERT INTO app_settings (key, value) VALUES (?, ?) "
                 "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
                 (SETTINGS_KEY_HF_ACCESS_TOKEN, value.strip()),
+            )
+
+    def get_speaker_diarization_enabled(self) -> bool:
+        with self._connect() as conn:
+            r = conn.execute(
+                "SELECT value FROM app_settings WHERE key = ?",
+                (SETTINGS_KEY_SPEAKER_DIARIZATION_ENABLED,),
+            ).fetchone()
+        if not r:
+            return DEFAULT_SPEAKER_DIARIZATION_ENABLED
+        raw = (r["value"] or "").strip().lower()
+        if raw in ("0", "false", "no", "off"):
+            return False
+        if raw in ("1", "true", "yes", "on"):
+            return True
+        return DEFAULT_SPEAKER_DIARIZATION_ENABLED
+
+    def set_speaker_diarization_enabled(self, value: bool) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                "INSERT INTO app_settings (key, value) VALUES (?, ?) "
+                "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                (SETTINGS_KEY_SPEAKER_DIARIZATION_ENABLED, "1" if value else "0"),
             )
 
     def list_session_speakers(self, session_id: str) -> list[tuple[str, str]]:

@@ -33,15 +33,15 @@ Give users a **single place** to: manage **sessions** (chat-style history), **re
 ## Functional highlights
 
 - **Sessions** with persistent history; **Arabic/English UI** chrome (RTL for Arabic), stored as `ui_language` (independent of Whisper’s transcription language).
-- **Speaker diarization:** when pyannote runs successfully, transcript lines use **`SPEAKER_XX [MM:SS - MM:SS]:`**; the UI can collect display names, rewrite the transcript file, persist mappings in **`session_speakers`**, then run summarization.
+- **Speaker diarization:** optional (default on). When enabled and pyannote runs successfully, transcript lines use **`SPEAKER_XX [MM:SS - MM:SS]:`**; the UI can collect display names, rewrite the transcript file, persist mappings in **`session_speakers`**, then run summarization. When disabled, lines use **`[MM:SS - MM:SS]:`** and summarization follows transcription directly.
 - **Prompts:** global **LLM system** text and global **Whisper `initial_prompt`** bias, plus optional **per-recording** LLM and Whisper overrides on the message that carries audio.
-- **Hugging Face token:** required for the **real** WhisperX transcription path (diarization is part of that pipeline); stored in Settings (`hf_access_token`) with env fallbacks (see README).
+- **Hugging Face token:** required when **speaker diarization** is enabled; stored in Settings (`hf_access_token`) with env fallbacks (see README).
 
 ## Important constraints and assumptions
 
 - **Offline-first intent:** Whisper/inference uses **local files only** at load time; operators are expected to **download** models when needed (UI or manual cache).
 - **Ollama** must be **running locally** with a **pulled model** (configurable via env).
-- **Pyannote** models are **gated** on the Hub; terms must be accepted and the same **HF token** requirement as above applies for real transcription.
+- **Pyannote** models are **gated** on the Hub; terms must be accepted and an **HF token** is required **when speaker diarization is enabled** (default on).
 - **Windows:** `main.py` prepends CUDA runtime DLL paths from the pinned **`nvidia-*`** wheels so GPU stacks can load reliably ([`nvidia_windows_dlls.py`](../src/meeting_assistant/nvidia_windows_dlls.py)).
 
 ## Documentation in the repo

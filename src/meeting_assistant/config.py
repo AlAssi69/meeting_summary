@@ -81,9 +81,12 @@ def _hf_access_token_from_env() -> str:
     return ""
 
 
-# Hugging Face token: required for real WhisperX transcription (pyannote diarization in the same path).
+# Hugging Face token: required when speaker diarization is enabled (pyannote via WhisperX).
 # Set in ``.env`` (see ``MEETING_ASSISTANT_HF_TOKEN``) or in the real environment; Settings can override when non-empty.
 HF_ACCESS_TOKEN: str = _hf_access_token_from_env()
+
+# Speaker diarization (pyannote). Default on; Settings / SQLite override after first run.
+SPEAKER_DIARIZATION_ENABLED: bool = _env_bool("MEETING_ASSISTANT_SPEAKER_DIARIZATION", True)
 
 # Ollama — Windows + WSL2: use "localhost" so host port forwarding reaches the service;
 # on Linux/macOS default 127.0.0.1 matches a typical local bind. Override with env vars.

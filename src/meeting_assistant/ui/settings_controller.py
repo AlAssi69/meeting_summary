@@ -14,6 +14,7 @@ class SettingsController(QObject):
     meetingFilesFolderChanged = Signal()
     meetingOutputRootCustomChanged = Signal()
     hfAccessTokenConfiguredChanged = Signal()
+    speakerDiarizationEnabledChanged = Signal()
 
     def __init__(self, repo: SessionRepository, parent=None) -> None:
         super().__init__(parent)
@@ -67,6 +68,15 @@ class SettingsController(QObject):
     def setHfAccessToken(self, value: str) -> None:
         self._repo.set_hf_access_token(value or "")
         self.hfAccessTokenConfiguredChanged.emit()
+
+    @Property(bool, notify=speakerDiarizationEnabledChanged)
+    def speakerDiarizationEnabled(self) -> bool:
+        return self._repo.get_speaker_diarization_enabled()
+
+    @Slot(bool)
+    def setSpeakerDiarizationEnabled(self, value: bool) -> None:
+        self._repo.set_speaker_diarization_enabled(bool(value))
+        self.speakerDiarizationEnabledChanged.emit()
 
     @Slot(str, result=bool)
     def hfTokenPreviewLooksValid(self, preview: str) -> bool:

@@ -39,6 +39,10 @@ SETTINGS_KEY_UI_LANGUAGE: str = "ui_language"
 # Hugging Face token for WhisperX (real STT path); Settings preferred over env when non-empty.
 SETTINGS_KEY_HF_ACCESS_TOKEN: str = "hf_access_token"
 
+# Speaker diarization (pyannote via WhisperX); persisted as "1" / "0" in app_settings.
+SETTINGS_KEY_SPEAKER_DIARIZATION_ENABLED: str = "speaker_diarization_enabled"
+DEFAULT_SPEAKER_DIARIZATION_ENABLED: bool = True
+
 # Removed from application logic; stripped from SQLite on startup if still present.
 SETTINGS_DEPRECATED_SQLITE_KEYS: frozenset[str] = frozenset(
     {

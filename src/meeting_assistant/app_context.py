@@ -12,7 +12,10 @@ from meeting_assistant.adapters.whisperx_adapter import WhisperXTranscriptionAda
 from meeting_assistant.ports.session_repository import SessionRepository
 from meeting_assistant.ports.summarization import SummarizationPort
 from meeting_assistant.ports.transcription import TranscriptionPort
-from meeting_assistant.services.hf_token import resolve_hf_access_token
+from meeting_assistant.services.hf_token import (
+    resolve_hf_access_token,
+    resolve_speaker_diarization_enabled,
+)
 from meeting_assistant.services.transcription_audio_prep import build_transcription_audio_preparer
 from meeting_assistant.services.whisperx_engine import WhisperXEngine
 from meeting_assistant.ui.app_facade import AppFacade
@@ -39,8 +42,12 @@ def build_app_facade(engine: QQmlApplicationEngine) -> AppFacade:
     def _token_resolver() -> str:
         return resolve_hf_access_token(repo)
 
+    def _diarization_resolver() -> bool:
+        return resolve_speaker_diarization_enabled(repo)
+
     speech_engine = WhisperXEngine(
         token_resolver=_token_resolver,
+        diarization_resolver=_diarization_resolver,
         audio_preparer=build_transcription_audio_preparer(),
     )
     if config.USE_MOCK_BACKEND:

@@ -54,3 +54,23 @@ def format_diarized_transcript(segments: list[dict]) -> str:
         lines.append(f"{label} [{ts_a} - {ts_b}]: {text}")
     out = "\n\n".join(lines).strip()
     return out if out else "(No speech detected)"
+
+
+def format_aligned_transcript(segments: list[dict]) -> str:
+    """One block per segment: [start - end]: text (no speaker labels).
+
+    Used when diarization is disabled; blocks are blank-line separated like
+    ``format_diarized_transcript``.
+    """
+    lines: list[str] = []
+    for seg in segments:
+        text = (seg.get("text") or "").strip()
+        if not text:
+            continue
+        start = float(seg.get("start", 0.0))
+        end = float(seg.get("end", start))
+        ts_a = format_timestamp(start)
+        ts_b = format_timestamp(end)
+        lines.append(f"[{ts_a} - {ts_b}]: {text}")
+    out = "\n\n".join(lines).strip()
+    return out if out else "(No speech detected)"

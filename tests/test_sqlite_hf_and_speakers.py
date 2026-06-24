@@ -35,6 +35,27 @@ class TestSqliteHfAndSpeakers(unittest.TestCase):
             del repo
             gc.collect()
 
+    def test_speaker_diarization_default_on(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
+            db = Path(td) / "t.db"
+            repo = SqliteSessionRepository(db)
+            self.assertTrue(repo.get_speaker_diarization_enabled())
+            del repo
+            gc.collect()
+
+    def test_speaker_diarization_round_trip(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
+            db = Path(td) / "t.db"
+            repo = SqliteSessionRepository(db)
+            repo.set_speaker_diarization_enabled(False)
+            self.assertFalse(repo.get_speaker_diarization_enabled())
+            del repo
+            gc.collect()
+            repo2 = SqliteSessionRepository(db)
+            self.assertFalse(repo2.get_speaker_diarization_enabled())
+            del repo2
+            gc.collect()
+
     def test_session_speakers_replace_and_delete_session_cascade(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             db = Path(td) / "t.db"

@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from meeting_assistant.core.constants import (
+    DEFAULT_SPEAKER_DIARIZATION_ENABLED,
     DEFAULT_SUMMARY_PROMPT,
     DEFAULT_UI_LANGUAGE,
     DEFAULT_WHISPER_CONTEXT,
@@ -12,6 +13,7 @@ from meeting_assistant.core.constants import (
     SETTINGS_KEY_GLOBAL_WHISPER_CONTEXT,
     SETTINGS_KEY_HF_ACCESS_TOKEN,
     SETTINGS_KEY_MEETING_OUTPUT_ROOT,
+    SETTINGS_KEY_SPEAKER_DIARIZATION_ENABLED,
     SETTINGS_KEY_UI_LANGUAGE,
     MessageRole,
 )
@@ -36,6 +38,9 @@ class InMemorySessionRepository(SessionRepository):
             SETTINGS_KEY_MEETING_OUTPUT_ROOT: "",
             SETTINGS_KEY_UI_LANGUAGE: DEFAULT_UI_LANGUAGE,
             SETTINGS_KEY_HF_ACCESS_TOKEN: "",
+            SETTINGS_KEY_SPEAKER_DIARIZATION_ENABLED: (
+                "1" if DEFAULT_SPEAKER_DIARIZATION_ENABLED else "0"
+            ),
         }
 
     def list_sessions(self) -> list[Session]:
@@ -183,6 +188,17 @@ class InMemorySessionRepository(SessionRepository):
 
     def set_hf_access_token(self, value: str) -> None:
         self._settings[SETTINGS_KEY_HF_ACCESS_TOKEN] = value.strip()
+
+    def get_speaker_diarization_enabled(self) -> bool:
+        raw = (self._settings.get(SETTINGS_KEY_SPEAKER_DIARIZATION_ENABLED) or "").strip().lower()
+        if raw in ("0", "false", "no", "off"):
+            return False
+        if raw in ("1", "true", "yes", "on"):
+            return True
+        return DEFAULT_SPEAKER_DIARIZATION_ENABLED
+
+    def set_speaker_diarization_enabled(self, value: bool) -> None:
+        self._settings[SETTINGS_KEY_SPEAKER_DIARIZATION_ENABLED] = "1" if value else "0"
 
     def list_session_speakers(self, session_id: str) -> list[tuple[str, str]]:
         d = self._session_speakers.get(session_id) or {}

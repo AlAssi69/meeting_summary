@@ -95,8 +95,10 @@ class ModelStatusController(QObject):
     def cacheStatusHint(self) -> str:
         parts: list[str] = []
         if not config.USE_MOCK_BACKEND:
-            fn = getattr(self._engine, "is_hf_token_configured", None)
-            if callable(fn) and not fn():
+            fn = getattr(self._engine, "is_diarization_enabled", None)
+            diarization_on = fn() if callable(fn) else True
+            hf_fn = getattr(self._engine, "is_hf_token_configured", None)
+            if diarization_on and callable(hf_fn) and not hf_fn():
                 parts.append(
                     self.tr(
                         "No Hugging Face token — add it in Settings (or set MEETING_ASSISTANT_HF_TOKEN) for "
