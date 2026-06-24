@@ -12,7 +12,7 @@ This document is designed to act as an extension to existing `SRS.md`, adhering 
 
 - **Transcription:** `WhisperXAdapter` / WhisperX pipeline (ASR → alignment → diarization when speaker diarization is enabled and a Hugging Face token is available).
 - **Worker split:** `TranscriptionWorker` writes the transcript and emits **`finished_raw(transcript, txt_path, speaker_keys)`**; `ChatController` handles the intercept UI, optional transcript rewrite with user labels, then starts **`SummarizeWorker`** for a **single** Ollama summary of the (possibly relabeled) transcript.
-- **Persistence:** SQLite table **`session_speakers`**; Settings keys **`speaker_diarization_enabled`** (default on) and **`hf_access_token`** (see `src/meeting_assistant/core/constants.py`), with environment fallbacks documented in the README.
+- **Persistence:** SQLite table **`session_speakers`**; Settings keys **`speaker_diarization_enabled`** (default off) and **`hf_access_token`** (see `src/meeting_assistant/core/constants.py`), with environment fallbacks documented in the README.
 
 The sections below retain the original design intent; **§5** records the historical rollout as **completed** phases.
 
@@ -26,7 +26,7 @@ The sections below retain the original design intent; **§5** records the histor
 
 This specification documents **speaker diarization** and **word-level timestamp alignment** in the Local AI Meeting Assistant: structured, multi-speaker transcript lines and a deliberate **halt** between transcription and summarization so operators can map `SPEAKER_XX` labels to display names when desired.
 
-**Optional diarization:** Speaker diarization may be disabled in Settings or via `MEETING_ASSISTANT_SPEAKER_DIARIZATION=0` (default **on**). Forced alignment **always** runs. When diarization is off, transcripts use `[MM:SS - MM:SS]:` lines without `SPEAKER_XX` labels and the speaker-naming intercept is skipped; no Hugging Face token is required.
+**Optional diarization:** Speaker diarization is **off by default**; enable it in Settings or via `MEETING_ASSISTANT_SPEAKER_DIARIZATION=1`. Forced alignment **always** runs. When diarization is off, transcripts use `[MM:SS - MM:SS]:` lines without `SPEAKER_XX` labels and the speaker-naming intercept is skipped; no Hugging Face token is required.
 
 **1.2 Priority Matrix**
 

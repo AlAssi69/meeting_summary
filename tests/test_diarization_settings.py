@@ -15,9 +15,9 @@ from meeting_assistant.services.whisperx_engine import WhisperXEngine
 
 
 class TestDiarizationSettings(unittest.TestCase):
-    def test_memory_repo_default_on(self) -> None:
+    def test_memory_repo_default_off(self) -> None:
         repo = InMemorySessionRepository()
-        self.assertTrue(repo.get_speaker_diarization_enabled())
+        self.assertFalse(repo.get_speaker_diarization_enabled())
 
     def test_memory_repo_round_trip(self) -> None:
         repo = InMemorySessionRepository()
@@ -26,11 +26,11 @@ class TestDiarizationSettings(unittest.TestCase):
         repo.set_speaker_diarization_enabled(True)
         self.assertTrue(repo.get_speaker_diarization_enabled())
 
-    def test_sqlite_default_on_fresh_db(self) -> None:
+    def test_sqlite_default_off_fresh_db(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             db = Path(td) / "t.db"
             repo = SqliteSessionRepository(db)
-            self.assertTrue(repo.get_speaker_diarization_enabled())
+            self.assertFalse(repo.get_speaker_diarization_enabled())
             del repo
             gc.collect()
 

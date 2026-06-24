@@ -1,6 +1,6 @@
 # 🗂️ Local AI Meeting Assistant
 
-A **desktop application** 💻 for **offline-capable** meeting workflows: record or upload audio, **transcribe** with **WhisperX** 🎙️ (ASR, forced alignment, and **speaker diarization** via pyannote), and **summarize** with a local LLM through **Ollama** 🦙—without sending audio or transcripts to the cloud by default.
+A **desktop application** 💻 for **offline-capable** meeting workflows: record or upload audio, **transcribe** with **WhisperX** 🎙️ (ASR, forced alignment, and optional **speaker diarization** via pyannote), and **summarize** with a local LLM through **Ollama** 🦙—without sending audio or transcripts to the cloud by default.
 
 The UI is **Qt Quick (QML)** on **PySide6** 🐍; Python owns persistence, AI adapters, and background work (`QThread` workers) so the interface stays responsive.
 
@@ -73,14 +73,14 @@ The UI is **Qt Quick (QML)** on **PySide6** 🐍; Python owns persistence, AI ad
 |------|----------------|
 | **💬 Sessions** | Chat-style sessions with local history (SQLite when not in mock mode). |
 | **🎵 Audio** | Microphone capture (Qt Multimedia, when available) and file upload / drag-and-drop. |
-| **🎙️ Speech-to-text** | **WhisperX** (faster-whisper + forced alignment; optional **pyannote diarization**, **on by default**). When diarization is enabled, a **Hugging Face access token** is required (Hub-gated pyannote stack). When disabled, transcription runs without a token and emits timestamp-only lines (`[MM:SS - MM:SS]: …`). Toggle in **Settings** or set **`MEETING_ASSISTANT_SPEAKER_DIARIZATION`** (`1` / `0`). Store the HF token in **Settings** (recommended) or set **`MEETING_ASSISTANT_HF_TOKEN`** (or `HF_TOKEN` / `HF_ACCESS_TOKEN` / `HUGGING_FACE_HUB_TOKEN`). Accept **pyannote** model conditions on the Hub when using diarization. |
+| **🎙️ Speech-to-text** | **WhisperX** (faster-whisper + forced alignment; optional **pyannote diarization**, **off by default**). When diarization is enabled, a **Hugging Face access token** is required (Hub-gated pyannote stack). When disabled, transcription runs without a token and emits timestamp-only lines (`[MM:SS - MM:SS]: …`). Toggle in **Settings** or set **`MEETING_ASSISTANT_SPEAKER_DIARIZATION`** (`1` / `0`). Store the HF token in **Settings** (recommended) or set **`MEETING_ASSISTANT_HF_TOKEN`** (or `HF_TOKEN` / `HF_ACCESS_TOKEN` / `HUGGING_FACE_HUB_TOKEN`). Accept **pyannote** model conditions on the Hub when using diarization. |
 | **🦙 Summarization** | **Ollama** `/api/chat` with a configurable model and composed system prompt. |
 | **📂 Artifacts** | Per-session folder under `<output_root>/sessions/<name>/` (audio, transcript `.txt`, summary `.txt`). |
 | **✏️ Prompts** | Separate **global Whisper context** (biases transcription) and **global LLM system** text (summarization), plus optional **per-recording** overrides stored with the session. |
 | **🔄 Pipeline** | **`TranscriptionWorker`** then **`SummarizeWorker`** (after you confirm speaker names when diarization finds speakers). Stopping mid-run may leave a **partial transcript**; if summarization fails after a successful transcript, the app can still show transcript text with an **error placeholder** for the summary. |
 | **🌐 UI language** | **Arabic** or **English** chrome (toolbar toggle); persisted as `ui_language` (`ar` / `en`). Default first-run UI language is **`ar`** ([`DEFAULT_UI_LANGUAGE`](src/meeting_assistant/core/constants.py)). Arabic uses **RTL** layout. Strings: [`src/meeting_assistant/i18n/ar_catalog.py`](src/meeting_assistant/i18n/ar_catalog.py); optional override [`src/meeting_assistant/translations/meeting_assistant_ar.qm`](src/meeting_assistant/translations/). Independent of `MEETING_ASSISTANT_WHISPER_LANGUAGE` (transcription language). |
 
-**👥 Speaker diarization** (optional, default on) uses WhisperX and pyannote when enabled. Transcripts use lines like `SPEAKER_00 [MM:SS - MM:SS]: …`. After transcription, the chat can ask for **display names**; confirming **rewrites** the transcript `.txt` with those names and runs the summary. Mappings are stored in SQLite (`session_speakers`). When diarization is off, transcripts use `[MM:SS - MM:SS]: …` and skip the speaker-naming step.
+**👥 Speaker diarization** (optional, default off) uses WhisperX and pyannote when enabled. Transcripts use lines like `SPEAKER_00 [MM:SS - MM:SS]: …`. After transcription, the chat can ask for **display names**; confirming **rewrites** the transcript `.txt` with those names and runs the summary. Mappings are stored in SQLite (`session_speakers`). When diarization is off, transcripts use `[MM:SS - MM:SS]: …` and skip the speaker-naming step.
 
 On **Windows** 🪟, `main.py` calls **`ensure_nvidia_pip_dll_directories()`** so CUDA runtime libraries shipped via the pinned **`nvidia-*`** wheels are discoverable when WhisperX uses the GPU.
 
@@ -94,7 +94,7 @@ On **Windows** 🪟, `main.py` calls **`ensure_nvidia_pip_dll_directories()`** s
 |--------|------------|--------|
 | **🎙️ ASR** | WhisperX + **CTranslate2** (faster-whisper–compatible weights) | Default size key `large-v3` → Hub repo `Systran/faster-whisper-large-v3`. Other keys and custom `org/name` repos: see `FASTER_WHISPER_HF_REPOS` in [`src/meeting_assistant/config.py`](src/meeting_assistant/config.py). Inference uses **local files only** at load (`local_files_only=True`); download via UI or pre-populate cache under `MEETING_ASSISTANT_WHISPER_CACHE`. |
 | **📐 Alignment** | WhisperX `load_align_model` / `align` | Alignment language: `MEETING_ASSISTANT_WHISPER_ALIGN_LANGUAGE` (default **`ar`** in code; set `auto` / `none` / empty to follow **ASR-detected** language). |
-| **👥 Diarization & speaker assignment** | WhisperX `DiarizationPipeline` + `assign_word_speakers` | Optional (Settings / `MEETING_ASSISTANT_SPEAKER_DIARIZATION`, default **on**). pyannote stack behind WhisperX; **HF token required only when diarization is enabled**. Exact checkpoint IDs depend on your installed **`whisperx`** version. |
+| **👥 Diarization & speaker assignment** | WhisperX `DiarizationPipeline` + `assign_word_speakers` | Optional (Settings / `MEETING_ASSISTANT_SPEAKER_DIARIZATION`, default **off**). pyannote stack behind WhisperX; **HF token required only when diarization is enabled**. Exact checkpoint IDs depend on your installed **`whisperx`** version. |
 | **🦙 Summarization** | **Ollama** `POST /api/chat` | Default model in code: `gemma4:e4b128k` (`MEETING_ASSISTANT_OLLAMA_MODEL`). |
 
 ---
@@ -218,7 +218,7 @@ These are stable identifiers and defaults used across the app (see the file for 
 | **`SETTINGS_KEY_MEETING_OUTPUT_ROOT`** | Optional custom meeting output root (unless overridden by `MEETING_ASSISTANT_OUTPUT_ROOT`). |
 | **`SETTINGS_KEY_UI_LANGUAGE`** | `ui_language`: `ar` or `en`. |
 | **`SETTINGS_KEY_HF_ACCESS_TOKEN`** | HF token stored in Settings (preferred over env when non-empty in resolvers). |
-| **`SETTINGS_KEY_SPEAKER_DIARIZATION_ENABLED`** | `speaker_diarization_enabled` in SQLite (`1` / `0`; default on). |
+| **`SETTINGS_KEY_SPEAKER_DIARIZATION_ENABLED`** | `speaker_diarization_enabled` in SQLite (`1` / `0`; default off). |
 | **`SETTINGS_DEPRECATED_SQLITE_KEYS`** | Legacy keys stripped on startup if present: `global_default_prompt`, `prompt_bundle_v2_applied`. |
 | **`DEFAULT_UI_LANGUAGE`** | First-run UI chrome default: **`ar`**. |
 | **`DEFAULT_SUMMARY_PROMPT`** | Default Arabic structured summarization instructions (LLM system). |
@@ -262,7 +262,7 @@ If `MEETING_ASSISTANT_OLLAMA_BASE_URL` is unset, the client uses `http://{OLLAMA
 
 ### 🤗 Hugging Face token (speaker diarization)
 
-Required **only when speaker diarization is enabled** (default). Disable diarization in Settings or set `MEETING_ASSISTANT_SPEAKER_DIARIZATION=0` to transcribe without a token.
+Required **only when speaker diarization is enabled** (off by default). Enable diarization in Settings or set `MEETING_ASSISTANT_SPEAKER_DIARIZATION=1`.
 
 The process reads the **first non-empty** value among (after `.env` load):
 
@@ -272,7 +272,7 @@ In-app **Settings** can override env when the stored token is non-empty (see `re
 
 | Variable | Default | Meaning |
 |----------|---------|---------|
-| `MEETING_ASSISTANT_SPEAKER_DIARIZATION` | `1` | If `0` / `false` / `off`, skip pyannote diarization (alignment still runs). Persisted Settings override after first run. |
+| `MEETING_ASSISTANT_SPEAKER_DIARIZATION` | `0` | If `1` / `true` / `on`, run pyannote diarization (alignment still runs). Persisted Settings override after first run. |
 
 <a id="env-whisper-whisperx"></a>
 
@@ -564,7 +564,7 @@ Optional: `pip install '.[dev]'` then `ruff check src tests`.
 - **Whisper cache incomplete:** Fill `MEETING_ASSISTANT_WHISPER_CACHE` or use in-app download; check `MEETING_ASSISTANT_WHISPER_MIN_BIN_BYTES` for custom repos 📥.
 - **GPU errors:** Try `MEETING_ASSISTANT_WHISPER_DEVICE=cpu` or tune `MEETING_ASSISTANT_WHISPER_COMPUTE_TYPES`; Windows CUDA DLLs: `nvidia-*` wheels + `nvidia_windows_dlls.py`.
 - **TorchCodec / pyannote warning on Windows:** Pip TorchCodec may lack native DLLs; WhisperX still decodes via FFmpeg when FFmpeg resolves. Benign warning filtered at startup in `main.py` ⚠️.
-- **HF token:** Required when **speaker diarization** is enabled (Settings or env); accept Hub model terms 🤗. Disable diarization in Settings to transcribe without a token.
+- **HF token:** Required when **speaker diarization** is enabled (Settings or env); accept Hub model terms 🤗. Diarization is off by default — enable it in Settings or set `MEETING_ASSISTANT_SPEAKER_DIARIZATION=1` when you need speaker labels.
 - **pytest import errors:** Set `PYTHONPATH` to **`src`** 🧪.
 
 ---
