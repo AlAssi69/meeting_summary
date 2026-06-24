@@ -2,18 +2,18 @@
 
 ## Name and purpose
 
-**Local AI Meeting Assistant** is a **desktop app** for **privacy-oriented meeting workflows**: capture or import audio, **transcribe** it locally with **WhisperX** (ASR, forced alignment, and **speaker diarization** via pyannote), and **summarize** the transcript with a **local LLM** through **Ollama**—so **audio and text are not sent to cloud STT/LLM services** by design.
+**Local AI Meeting Assistant** is a **desktop app** for **privacy-oriented meeting workflows**: capture or import audio, **transcribe** it locally with **WhisperX** (ASR, forced alignment, and optional **speaker diarization** via pyannote), and **summarize** the transcript with a **local LLM** through **Ollama**—so **audio and text are not sent to cloud STT/LLM services** by design.
 
 ## Product goal
 
-Give users a **single place** to: manage **sessions** (chat-style history), **record** or **upload** meeting audio, get a **diarized transcript** (when speakers are detected) and a **text summary** on disk, with **configurable prompts** so transcription and summarization match their domain (e.g. Arabic meetings, domain jargon).
+Give users a **single place** to: manage **sessions** (chat-style history), **record** or **upload** meeting audio, get a transcript (optionally **diarized** when that feature is enabled) and a **text summary** on disk, with **configurable prompts** so transcription and summarization match their domain (e.g. Arabic meetings, domain jargon).
 
 ## Current technical stack
 
 | Layer | Technology |
 |--------|------------|
 | **UI** | **PySide6**, **Qt Quick (QML)** — responsive layout, light/dark themes |
-| **Speech-to-text** | **WhisperX** (faster-whisper–compatible CT2 ASR, Wav2Vec2 alignment, **pyannote** diarization); models cached on disk; optional **CUDA**, automatic **CPU fallback** where configured |
+| **Speech-to-text** | **WhisperX** (faster-whisper–compatible CT2 ASR, Wav2Vec2 alignment, optional **pyannote** diarization); models cached on disk; optional **CUDA**, automatic **CPU fallback** where configured |
 | **LLM** | **Ollama** over HTTP (`/api/chat`; default host **`localhost` on Windows**, **`127.0.0.1` on Linux/macOS**, or override with `MEETING_ASSISTANT_OLLAMA_BASE_URL`) |
 | **HTTP client** | **httpx** |
 | **Model downloads** | **huggingface_hub** (Whisper CT2 snapshots and gated Hub models into a local cache) |
@@ -33,7 +33,7 @@ Give users a **single place** to: manage **sessions** (chat-style history), **re
 ## Functional highlights
 
 - **Sessions** with persistent history; **Arabic/English UI** chrome (RTL for Arabic), stored as `ui_language` (independent of Whisper’s transcription language).
-- **Speaker diarization:** optional (default on). When enabled and pyannote runs successfully, transcript lines use **`SPEAKER_XX [MM:SS - MM:SS]:`**; the UI can collect display names, rewrite the transcript file, persist mappings in **`session_speakers`**, then run summarization. When disabled, lines use **`[MM:SS - MM:SS]:`** and summarization follows transcription directly.
+- **Speaker diarization:** optional (default off). When enabled and pyannote runs successfully, transcript lines use **`SPEAKER_XX [MM:SS - MM:SS]:`**; the UI can collect display names, rewrite the transcript file, persist mappings in **`session_speakers`**, then run summarization. When disabled, lines use **`[MM:SS - MM:SS]:`** and summarization follows transcription directly.
 - **Prompts:** global **LLM system** text and global **Whisper `initial_prompt`** bias, plus optional **per-recording** LLM and Whisper overrides on the message that carries audio.
 - **Hugging Face token:** required when **speaker diarization** is enabled; stored in Settings (`hf_access_token`) with env fallbacks (see README).
 
@@ -41,7 +41,7 @@ Give users a **single place** to: manage **sessions** (chat-style history), **re
 
 - **Offline-first intent:** Whisper/inference uses **local files only** at load time; operators are expected to **download** models when needed (UI or manual cache).
 - **Ollama** must be **running locally** with a **pulled model** (configurable via env).
-- **Pyannote** models are **gated** on the Hub; terms must be accepted and an **HF token** is required **when speaker diarization is enabled** (default on).
+- **Pyannote** models are **gated** on the Hub; terms must be accepted and an **HF token** is required **when speaker diarization is enabled** (off by default).
 - **Windows:** `main.py` prepends CUDA runtime DLL paths from the pinned **`nvidia-*`** wheels so GPU stacks can load reliably ([`nvidia_windows_dlls.py`](../src/meeting_assistant/nvidia_windows_dlls.py)).
 
 ## Documentation in the repo

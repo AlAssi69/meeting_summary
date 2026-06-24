@@ -12,7 +12,7 @@
 
 **1.1 Purpose**
 
-This document defines the architecture and requirements for a minimal desktop application that supports offline-capable meeting workflows: record or upload audio, transcribe with a local **WhisperX** pipeline (ASR, forced alignment, and optional **pyannote-backed diarization**, **on by default**), and summarize with a local LLM through **Ollama**, without sending audio or transcripts to the cloud. In the **non-mock** configuration, a **Hugging Face access token** (Settings or environment) is **required only when speaker diarization is enabled**; when diarization is disabled, transcription runs without a token. See [README.md](../README.md).
+This document defines the architecture and requirements for a minimal desktop application that supports offline-capable meeting workflows: record or upload audio, transcribe with a local **WhisperX** pipeline (ASR, forced alignment, and optional **pyannote-backed diarization**, **off by default**), and summarize with a local LLM through **Ollama**, without sending audio or transcripts to the cloud. In the **non-mock** configuration, a **Hugging Face access token** (Settings or environment) is **required only when speaker diarization is enabled**; when diarization is disabled, transcription runs without a token. See [README.md](../README.md).
 
 **1.2 Scope**
 
@@ -48,7 +48,7 @@ A **mock backend** (environment-controlled) may substitute stub transcription, s
 * **Database:** Single SQLite file (e.g. under the configured app data directory unless overridden).
 * **`sessions`:** `id` (primary key), `title`, `created_at`, **`artifacts_slug`** (unique folder name under the meeting output tree).
 * **`messages`:** `id`, `session_id`, `role` (e.g. user / assistant / system), `content`, `file_path`, `created_at`, `system_kind` (for system banner severity), **`recording_llm_instructions`** and **`recording_whisper_context`** (optional per-recording prompt layers; see §3.3), **`assistant_kind`** (e.g. transcript vs summary for assistant bubbles).
-* **`app_settings`:** Key/value rows for global LLM system text (`global_llm_system_prompt`), global Whisper transcription context (`global_whisper_context`), optional meeting output root (`meeting_output_root`), **`ui_language`** (`ar` / `en`), speaker diarization toggle (`speaker_diarization_enabled`, default on), Hugging Face token (`hf_access_token`) when diarization is enabled, and related keys documented in the README. Deprecated keys (`global_default_prompt`, `prompt_bundle_v2_applied`) are deleted on startup.
+* **`app_settings`:** Key/value rows for global LLM system text (`global_llm_system_prompt`), global Whisper transcription context (`global_whisper_context`), optional meeting output root (`meeting_output_root`), **`ui_language`** (`ar` / `en`), speaker diarization toggle (`speaker_diarization_enabled`, default off), Hugging Face token (`hf_access_token`) when diarization is enabled, and related keys documented in the README. Deprecated keys (`global_default_prompt`, `prompt_bundle_v2_applied`) are deleted on startup.
 * **`session_speakers`:** `id` (INTEGER PRIMARY KEY AUTOINCREMENT), `session_id` (TEXT, FOREIGN KEY to `sessions(id)` ON DELETE CASCADE), `speaker_key` (TEXT, e.g. `SPEAKER_00`), `speaker_name` (TEXT, user display name), UNIQUE(`session_id`, `speaker_key`). See [Feature SRS - Speaker Diarization and Alignment.md](Feature%20SRS%20-%20Speaker%20Diarization%20and%20Alignment.md).
 
 ---

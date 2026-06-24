@@ -35,11 +35,11 @@ class TestSqliteHfAndSpeakers(unittest.TestCase):
             del repo
             gc.collect()
 
-    def test_speaker_diarization_default_on(self) -> None:
+    def test_speaker_diarization_default_off(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             db = Path(td) / "t.db"
             repo = SqliteSessionRepository(db)
-            self.assertTrue(repo.get_speaker_diarization_enabled())
+            self.assertFalse(repo.get_speaker_diarization_enabled())
             del repo
             gc.collect()
 
