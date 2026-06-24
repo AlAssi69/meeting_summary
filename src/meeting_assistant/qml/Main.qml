@@ -1253,14 +1253,38 @@ ApplicationWindow {
                 height: 1
                 color: app.themeController.borderColor
             }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                Label {
+                    text: qsTr("Speaker diarization")
+                    color: app.themeController.textPrimary
+                    font.pixelSize: 13
+                    Layout.fillWidth: true
+                    wrapMode: Text.Wrap
+                }
+                Switch {
+                    checked: app.settingsController.speakerDiarizationEnabled
+                    onToggled: app.settingsController.setSpeakerDiarizationEnabled(checked)
+                }
+            }
             Label {
-                text: qsTr("Hugging Face token (pyannote / speaker diarization)")
+                text: qsTr("When enabled, transcripts label each speaker (SPEAKER_00, …) and may pause for naming. Requires a Hugging Face token. When disabled, transcription uses timestamps only and does not need a token.")
+                color: app.themeController.textMuted
+                font.pixelSize: 11
+                wrapMode: Text.Wrap
+                Layout.fillWidth: true
+            }
+            Label {
+                visible: app.settingsController.speakerDiarizationEnabled
+                text: qsTr("Hugging Face token (required for speaker diarization)")
                 color: app.themeController.textMuted
                 font.pixelSize: 12
                 wrapMode: Text.Wrap
                 Layout.fillWidth: true
             }
             Label {
+                visible: app.settingsController.speakerDiarizationEnabled
                 text: qsTr("Create a token at huggingface.co (read access). Accept the pyannote model conditions on the Hub first. The token is stored only on this device.")
                 color: app.themeController.textMuted
                 font.pixelSize: 11
@@ -1268,6 +1292,7 @@ ApplicationWindow {
                 Layout.fillWidth: true
             }
             RowLayout {
+                visible: app.settingsController.speakerDiarizationEnabled
                 Layout.fillWidth: true
                 spacing: 8
                 Basic.TextField {

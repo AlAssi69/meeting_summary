@@ -231,6 +231,11 @@ AR_UI: dict[tuple[str, str], str] = {
         "ملف الصوت غير متاح للتشغيل.",
 
     # --- Main.qml (HF + speaker card) ---
+    ("Main", "Speaker diarization"): "تفرقة المتحدثين",
+    ("Main", "When enabled, transcripts label each speaker (SPEAKER_00, …) and may pause for naming. Requires a Hugging Face token. When disabled, transcription uses timestamps only and does not need a token."):
+        "عند التفعيل، تُوسِم النصوص كل متحدث (SPEAKER_00، …) وقد تتوقف لطلب الأسماء. يتطلب رمز Hugging Face. عند التعطيل، يستخدم التفريغ الطوابع الزمنية فقط ولا يحتاج رمزًا.",
+    ("Main", "Hugging Face token (required for speaker diarization)"):
+        "رمز Hugging Face (مطلوب لتفرقة المتحدثين)",
     ("Main", "Hugging Face token (pyannote / speaker diarization)"):
         "رمز Hugging Face (pyannote / تفرقة المتحدثين)",
     ("Main", "Create a token at huggingface.co (read access). Accept the pyannote model conditions on the Hub first. The token is stored only on this device."):

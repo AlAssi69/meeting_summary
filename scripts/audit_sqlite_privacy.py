@@ -24,6 +24,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 _SENSITIVE_KEYS = (
     "hf_access_token",
+    "speaker_diarization_enabled",
     "meeting_output_root",
     "ui_language",
     "global_llm_system",

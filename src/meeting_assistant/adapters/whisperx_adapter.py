@@ -12,7 +12,7 @@ _log = logging.getLogger(__name__)
 
 
 class WhisperXTranscriptionAdapter(TranscriptionPort):
-    """WhisperX ASR + alignment + pyannote diarization; returns SPEAKER_XX transcript lines."""
+    """WhisperX ASR + alignment; optional pyannote diarization (SPEAKER_XX or timestamp-only lines)."""
 
     def __init__(self, engine: WhisperXEngine) -> None:
         self._engine = engine

@@ -11,7 +11,10 @@ from meeting_assistant import config
 from meeting_assistant.core.constants import MessageSystemKind
 from meeting_assistant.nvidia_windows_dlls import ensure_nvidia_pip_dll_directories
 from meeting_assistant.ports.audio_preparation import TranscriptionAudioPreparer
-from meeting_assistant.services.diarization_format import format_diarized_transcript
+from meeting_assistant.services.diarization_format import (
+    format_aligned_transcript,
+    format_diarized_transcript,
+)
 from meeting_assistant.services.ffmpeg_audio_preprocess import resolve_ffmpeg_executable
 from meeting_assistant.services.hf_token import resolve_hf_access_token
 from meeting_assistant.services.transcription_audio_prep import NoOpTranscriptionAudioPreparer
@@ -100,15 +103,19 @@ def _diarize_pipeline_kwargs(hf_token: str, device: str, cache_dir: Path) -> dic
 
 
 class WhisperXEngine:
-    """WhisperX transcription + forced alignment + pyannote speaker diarization."""
+    """WhisperX transcription + forced alignment; optional pyannote speaker diarization."""
 
     def __init__(
         self,
         token_resolver: Callable[[], str] | None = None,
         *,
+        diarization_resolver: Callable[[], bool] | None = None,
         audio_preparer: TranscriptionAudioPreparer | None = None,
     ) -> None:
         self._token_resolver = token_resolver or (lambda: resolve_hf_access_token(None))
+        self._diarization_resolver = diarization_resolver or (
+            lambda: bool(config.SPEAKER_DIARIZATION_ENABLED)
+        )
         self._audio_preparer: TranscriptionAudioPreparer = (
             audio_preparer if audio_preparer is not None else NoOpTranscriptionAudioPreparer()
         )
@@ -151,6 +158,9 @@ class WhisperXEngine:
 
     def is_hf_token_configured(self) -> bool:
         return bool(self._token_resolver().strip())
+
+    def is_diarization_enabled(self) -> bool:
+        return bool(self._diarization_resolver())
 
     def is_model_present(self) -> bool:
         if config.USE_MOCK_BACKEND:
@@ -271,13 +281,15 @@ class WhisperXEngine:
         initial_prompt: str | None = None,
         cancel_check: Callable[[], bool] | None = None,
     ) -> str:
+        diarization_on = self.is_diarization_enabled()
         hf_token = self._token_resolver().strip()
-        if not hf_token:
+        if diarization_on and not hf_token:
             self._last_failure_kind = "hf_auth"
             msg = (
-                "Hugging Face token is not set. Real transcription requires a token "
-                "(pyannote / diarization via WhisperX). Accept pyannote model conditions on the Hub, "
-                "then set the token in Settings or MEETING_ASSISTANT_HF_TOKEN (or HF_TOKEN / HF_ACCESS_TOKEN)."
+                "Hugging Face token is not set. Speaker diarization requires a token "
+                "(pyannote via WhisperX). Accept pyannote model conditions on the Hub, "
+                "then set the token in Settings or MEETING_ASSISTANT_HF_TOKEN (or HF_TOKEN / HF_ACCESS_TOKEN), "
+                "or disable speaker diarization in Settings."
             )
             self._notice_queue.append((MessageSystemKind.ERROR.value, msg))
             raise RuntimeError(msg)
@@ -293,6 +305,7 @@ class WhisperXEngine:
                 return self._transcribe_locked(
                     audio_path,
                     hf_token=hf_token,
+                    diarization_on=diarization_on,
                     initial_prompt=initial_prompt,
                     cancel_check=cancel_check,
                     _check_cancel=_check_cancel,
@@ -300,7 +313,7 @@ class WhisperXEngine:
             except TranscriptionCancelled:
                 raise
             except Exception as e:
-                if _looks_like_hf_auth_failure(e):
+                if diarization_on and _looks_like_hf_auth_failure(e):
                     self._last_failure_kind = "hf_auth"
                     self._notice_queue.append(
                         (
@@ -320,6 +333,7 @@ class WhisperXEngine:
         audio_path: Path,
         *,
         hf_token: str,
+        diarization_on: bool,
         initial_prompt: str | None,
         cancel_check: Callable[[], bool] | None,
         _check_cancel: Callable[[], None],
@@ -405,28 +419,34 @@ class WhisperXEngine:
                 t_al1 - t_al0,
             )
 
-            # Diarization (pyannote via HF token) — same effective_path as ASR / align
-            from whisperx.diarize import DiarizationPipeline
-
-            d_kw = _diarize_pipeline_kwargs(hf_token, device, config.WHISPER_DOWNLOAD_ROOT)
-            t_d0 = time.perf_counter()
-            diarize_model = DiarizationPipeline(**d_kw)
-            diarize_df = diarize_model(str(effective_path))
-            t_d1 = time.perf_counter()
-            _check_cancel()
-            trace_main("WhisperX diarize done elapsed_sec=%.2f", t_d1 - t_d0)
-
-            t_m0 = time.perf_counter()
-            result = whisperx.assign_word_speakers(diarize_df, result)
-            t_m1 = time.perf_counter()
-            trace_main("WhisperX assign_word_speakers done elapsed_sec=%.2f", t_m1 - t_m0)
             segments = result.get("segments") or []
+            if diarization_on:
+                # Diarization (pyannote via HF token) — same effective_path as ASR / align
+                from whisperx.diarize import DiarizationPipeline
+
+                d_kw = _diarize_pipeline_kwargs(hf_token, device, config.WHISPER_DOWNLOAD_ROOT)
+                t_d0 = time.perf_counter()
+                diarize_model = DiarizationPipeline(**d_kw)
+                diarize_df = diarize_model(str(effective_path))
+                t_d1 = time.perf_counter()
+                _check_cancel()
+                trace_main("WhisperX diarize done elapsed_sec=%.2f", t_d1 - t_d0)
+
+                t_m0 = time.perf_counter()
+                result = whisperx.assign_word_speakers(diarize_df, result)
+                t_m1 = time.perf_counter()
+                trace_main("WhisperX assign_word_speakers done elapsed_sec=%.2f", t_m1 - t_m0)
+                segments = result.get("segments") or []
+
             if cancel_check is not None:
                 for _ in segments:
                     if cancel_check():
                         raise TranscriptionCancelled()
 
-            text = format_diarized_transcript(segments)
+            if diarization_on:
+                text = format_diarized_transcript(segments)
+            else:
+                text = format_aligned_transcript(segments)
             if not text or text == "(No speech detected)":
                 _log.warning("Empty or no speech for %s", audio_path)
             return text or "(No speech detected)"
