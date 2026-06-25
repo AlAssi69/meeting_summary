@@ -20,7 +20,8 @@
 12. [تشغيل التطبيق](#تشغيل-التطبيق)
 13. [قائمة التحقق النهائية قبل أول استخدام](#قائمة-التحقق-النهائية-قبل-أول-استخدام)
 14. [استكشاف الأخطاء الشائعة](#استكشاف-الأخطاء-الشائعة)
-15. [مراجع إضافية](#مراجع-إضافية)
+15. [التسليم بدون إنترنت عبر Docker + USB](#التسليم-بدون-إنترنت-عبر-docker--usb)
+16. [مراجع إضافية](#مراجع-إضافية)
 
 ---
 
@@ -1079,6 +1080,36 @@ pytest
 
 ---
 
+<a id="التسليم-بدون-إنترنت-عبر-docker--usb"></a>
+
+## التسليم بدون إنترنت عبر Docker + USB
+
+إذا هدفك نقل التطبيق إلى جهاز آخر بدون تنزيل أي شيء من الإنترنت وقت التشغيل:
+
+1. على الجهاز المصدر (متصل بالإنترنت) شغّل:
+
+```powershell
+.\docker\export_offline.ps1 -OutputDir .\docker\offline-bundle
+```
+
+2. انسخ مجلد `docker/offline-bundle` إلى USB.
+3. على الجهاز الهدف (بدون إنترنت):
+   - انسخ المجلد محلياً.
+   - عدّل `.env.offline` وحدد عنوان Ollama الخارجي:
+     - على نفس الجهاز: `http://host.docker.internal:11434`
+     - على جهاز آخر بالشبكة: `http://192.168.1.50:11434`
+   - شغّل:
+
+```powershell
+.\import_and_run_offline.ps1 -BundleDir . -Profile gpu
+```
+
+> إن لم تتوفر GPU أو حصلت مشاكل CUDA، استخدم `-Profile cpu`.
+
+مستند مفصّل: [docs/OFFLINE_DOCKER_HANDOFF.md](OFFLINE_DOCKER_HANDOFF.md)
+
+---
+
 <a id="مراجع-إضافية"></a>
 
 ## مراجع إضافية
@@ -1091,6 +1122,7 @@ pytest
 | [docs/PROJECT_DESCRIPTION.md](PROJECT_DESCRIPTION.md) | نظرة عامة على المشروع |
 | [docs/SRS.md](SRS.md) | مواصفات المتطلبات |
 | [docs/Feature SRS - Speaker Diarization and Alignment.md](Feature%20SRS%20-%20Speaker%20Diarization%20and%20Alignment.md) | ملحق التفريغ متعدد المتحدثين والمحاذاة |
+| [docs/OFFLINE_DOCKER_HANDOFF.md](OFFLINE_DOCKER_HANDOFF.md) | دليل حزم Docker بدون إنترنت والنقل عبر USB |
 | [CONTRIBUTING.md](../CONTRIBUTING.md) | إرشادات المساهمة ومزامنة الوثائق مع الكود |
 
 ---

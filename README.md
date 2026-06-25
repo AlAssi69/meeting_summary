@@ -17,6 +17,7 @@ The UI is **Qt Quick (QML)** on **PySide6** 🐍; Python owns persistence, AI ad
   - [External tools](#dependencies-external-tools) — *Ollama, FFmpeg, optional GPU.*
   - [PyTorch and CUDA](#dependencies-pytorch-and-cuda) — *CUDA-capable `torch`, verification command, mock mode.*
 - [Install](#install) — *clone, venv, dependencies, FFmpeg & Ollama, optional `.env`.*
+- [Offline Docker handoff](#offline-docker-handoff) — *build once, copy via USB, run without internet on target.*
 - [Configuration: `.env`](#configuration-env) — *how `python-dotenv` loads the repo-root `.env` and precedence vs the OS environment.*
 - [`constants.py` (summary)](#constants-py-summary) — *settings keys, defaults, enums, and extension lists.*
 - [Configuration (environment variables)](#configuration-environment-variables) — *full `MEETING_ASSISTANT_*` reference from `config.py`.*
@@ -53,6 +54,7 @@ The UI is **Qt Quick (QML)** on **PySide6** 🐍; Python owns persistence, AI ad
 - 📋 [docs/SRS.md](docs/SRS.md) — Software Requirements Specification (intent and architecture).
 - 🎤 [docs/Feature SRS - Speaker Diarization and Alignment.md](docs/Feature%20SRS%20-%20Speaker%20Diarization%20and%20Alignment.md) — diarization and alignment addendum.
 - 🤝 [CONTRIBUTING.md](CONTRIBUTING.md) — development setup, documentation sync rules, PR checklist.
+- 🧊 [docs/OFFLINE_DOCKER_HANDOFF.md](docs/OFFLINE_DOCKER_HANDOFF.md) — USB/offline Docker packaging and runbook (Windows 11).
 
 ---
 
@@ -393,6 +395,39 @@ python main.py
 
 ---
 
+<a id="offline-docker-handoff"></a>
+
+## 🧊 Offline Docker handoff
+
+Use this when you need to hand over the app on USB and run without internet downloads on the target laptop.
+
+Files added under `docker/`:
+
+- `Dockerfile.gpu` (CUDA runtime profile)
+- `Dockerfile.cpu` (CPU fallback profile)
+- `compose.offline.yml` (GPU/CPU run services)
+- `seed_models.py` (preloads Whisper + HF cache at build time)
+- `export_offline.ps1` / `import_and_run_offline.ps1` (USB export/import workflow)
+
+Quick flow:
+
+```powershell
+# Source machine (online): build + preload + save tar bundle
+.\docker\export_offline.ps1 -OutputDir .\docker\offline-bundle
+
+# Target machine (offline): load tar files and run
+.\import_and_run_offline.ps1 -BundleDir . -Profile gpu
+```
+
+Set Ollama endpoint in `.env.offline`:
+
+- same machine host: `http://host.docker.internal:11434`
+- another device on LAN: `http://<ip-or-hostname>:11434`
+
+Detailed runbook: [`docs/OFFLINE_DOCKER_HANDOFF.md`](docs/OFFLINE_DOCKER_HANDOFF.md).
+
+---
+
 <a id="how-to-use-typical-flow"></a>
 
 ## 📖 How to use (typical flow)
@@ -563,6 +598,7 @@ Optional: `pip install '.[dev]'` then `ruff check src tests`.
 - **Ollama:** Use `MEETING_ASSISTANT_OLLAMA_BASE_URL` or adjust host/port defaults (Windows **`localhost`**, Linux/macOS **`127.0.0.1`**).
 - **Whisper cache incomplete:** Fill `MEETING_ASSISTANT_WHISPER_CACHE` or use in-app download; check `MEETING_ASSISTANT_WHISPER_MIN_BIN_BYTES` for custom repos 📥.
 - **GPU errors:** Try `MEETING_ASSISTANT_WHISPER_DEVICE=cpu` or tune `MEETING_ASSISTANT_WHISPER_COMPUTE_TYPES`; Windows CUDA DLLs: `nvidia-*` wheels + `nvidia_windows_dlls.py`.
+- **Offline Docker GUI on Windows 11:** If no window appears, verify Docker Desktop runs with WSL2 backend and that `docker/compose.offline.yml` keeps `/mnt/wslg` and `/tmp/.X11-unix` mounts.
 - **TorchCodec / pyannote warning on Windows:** Pip TorchCodec may lack native DLLs; WhisperX still decodes via FFmpeg when FFmpeg resolves. Benign warning filtered at startup in `main.py` ⚠️.
 - **HF token:** Required when **speaker diarization** is enabled (Settings or env); accept Hub model terms 🤗. Diarization is off by default — enable it in Settings or set `MEETING_ASSISTANT_SPEAKER_DIARIZATION=1` when you need speaker labels.
 - **pytest import errors:** Set `PYTHONPATH` to **`src`** 🧪.
