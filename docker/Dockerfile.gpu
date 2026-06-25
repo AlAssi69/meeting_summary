@@ -1,0 +1,46 @@
+FROM nvidia/cuda:12.9.0-cudnn-runtime-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    QT_QUICK_CONTROLS_STYLE=Basic \
+    MEETING_ASSISTANT_WHISPER_DEVICE=cuda \
+    MEETING_ASSISTANT_SPEAKER_DIARIZATION=0 \
+    MEETING_ASSISTANT_WHISPER_CACHE=/opt/meeting-assistant/models/whisper \
+    HF_HOME=/opt/meeting-assistant/models/hf \
+    MEETING_ASSISTANT_DATA_DIR=/opt/meeting-assistant/data \
+    MEETING_ASSISTANT_OUTPUT_ROOT=/opt/meeting-assistant/meeting_outputs
+
+WORKDIR /opt/meeting-assistant
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.12 python3-pip python3.12-venv python3.12-dev \
+    ffmpeg git curl ca-certificates \
+    libgl1 libegl1 libxkbcommon0 libx11-6 libxext6 libxrender1 libxcb1 libxcomposite1 libxdamage1 libxfixes3 libxi6 libxtst6 libdbus-1-3 libfontconfig1 libfreetype6 libglib2.0-0 libnss3 libasound2 libpulse0 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt ./requirements.txt
+RUN python3 -m pip install --upgrade pip setuptools wheel && \
+    python3 -m pip install -r requirements.txt
+
+COPY src ./src
+COPY main.py ./main.py
+COPY docker/entrypoint.sh /usr/local/bin/meeting-assistant-entrypoint.sh
+COPY docker/seed_models.py ./docker/seed_models.py
+
+RUN chmod +x /usr/local/bin/meeting-assistant-entrypoint.sh && \
+    mkdir -p /opt/meeting-assistant/models/whisper /opt/meeting-assistant/models/hf /opt/meeting-assistant/data /opt/meeting-assistant/meeting_outputs
+
+# Optional build-time preload for offline handoff bundles:
+# docker build -f docker/Dockerfile.gpu --build-arg PRELOAD_MODELS=1 --build-arg WHISPER_MODEL=large-v3 .
+ARG PRELOAD_MODELS=0
+ARG WHISPER_MODEL=large-v3
+ARG WHISPER_ALIGN_LANGUAGE=ar
+RUN if [ "$PRELOAD_MODELS" = "1" ]; then \
+      MEETING_ASSISTANT_WHISPER_MODEL="$WHISPER_MODEL" \
+      MEETING_ASSISTANT_WHISPER_ALIGN_LANGUAGE="$WHISPER_ALIGN_LANGUAGE" \
+      python3 ./docker/seed_models.py ; \
+    fi
+
+ENTRYPOINT ["/usr/local/bin/meeting-assistant-entrypoint.sh"]
