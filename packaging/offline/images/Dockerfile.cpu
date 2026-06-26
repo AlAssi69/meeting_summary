@@ -24,11 +24,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg git curl ca-certificates libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
+RUN python3.12 -m venv /opt/venv
+
+ENV PATH="/opt/venv/bin:$PATH"
+
 COPY packaging/offline/images/requirements-container.txt ./packaging/offline/images/requirements-container.txt
 COPY packaging/offline/images/requirements-cpu.txt ./packaging/offline/images/requirements-cpu.txt
-RUN python -m pip install --upgrade pip setuptools wheel && \
-    python -m pip install -r packaging/offline/images/requirements-container.txt && \
-    python -m pip install -r packaging/offline/images/requirements-cpu.txt
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip install --default-timeout=1000 --no-cache-dir -r packaging/offline/images/requirements-container.txt && \
+    pip install --default-timeout=1000 --no-cache-dir -r packaging/offline/images/requirements-cpu.txt
 
 COPY src ./src
 COPY main.py ./main.py
@@ -47,6 +51,8 @@ RUN if [ "$PRELOAD_MODELS" = "1" ]; then \
       HF_HUB_OFFLINE=0 TRANSFORMERS_OFFLINE=0 \
       python ./packaging/offline/scripts/preload_models.py ; \
     fi
+
+RUN python -c "import sys; assert '/opt/venv' in sys.prefix, 'FATAL: Python is running outside the container venv!'"
 
 ENV HF_HUB_OFFLINE=1 \
     TRANSFORMERS_OFFLINE=1 \

@@ -1,4 +1,5 @@
 .venv/
+.venv-host-client/
 .env
 .env.*
 !.env.example

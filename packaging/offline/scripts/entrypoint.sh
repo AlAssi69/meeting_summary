@@ -8,7 +8,7 @@ export HF_HUB_DISABLE_TELEMETRY="${HF_HUB_DISABLE_TELEMETRY:-1}"
 
 echo "[entrypoint] Starting WhisperX inference API on port ${WHISPER_API_PORT:-18080}..."
 
-exec python3 -m uvicorn packaging.offline.services.whisper_api:app \
+exec python -m uvicorn packaging.offline.services.whisper_api:app \
   --host 0.0.0.0 \
   --port "${WHISPER_API_PORT:-18080}" \
   --app-dir /opt/meeting-assistant
