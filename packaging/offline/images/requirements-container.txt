@@ -1,5 +1,5 @@
-# Shared Python deps for inference containers (torch installed separately per image).
-PySide6>=6.6.0,<7
+# Headless inference API dependencies (Path A).
+# PySide6/Qt belong in host-client/requirements-host.txt only — not in containers.
 python-dotenv>=1.0.0,<2
 whisperx>=3.1.0,<4
 huggingface_hub>=0.26.0,<2

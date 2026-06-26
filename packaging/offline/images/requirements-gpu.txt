@@ -1,5 +1,5 @@
 # CUDA PyTorch wheels for GPU inference image.
-# Aligned with nvidia/cuda:12.9.0-cudnn-runtime-ubuntu22.04 base image.
+# Aligned with nvidia/cuda:12.9.0-cudnn-runtime-ubuntu24.04 base image.
 # torch 2.8.x matches WhisperX metadata; cu129 wheels are published on the PyTorch index.
 --extra-index-url https://download.pytorch.org/whl/cu129
 torch>=2.8,<2.9

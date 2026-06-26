@@ -1,4 +1,5 @@
-# Lightweight host client (PyInstaller) — no WhisperX/torch on Windows host.
+# Lightweight host client (PyInstaller) — GUI on Windows host only.
+# Do not add PySide6 to requirements-container.txt (headless inference images).
 PySide6>=6.6.0,<7
 python-dotenv>=1.0.0,<2
 httpx>=0.27.0
