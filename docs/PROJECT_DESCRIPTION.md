@@ -39,7 +39,7 @@ Give users a **single place** to: manage **sessions** (chat-style history), **re
 
 ## Important constraints and assumptions
 
-- **Offline-first intent:** Whisper/inference uses **local files only** at load time; operators are expected to **download** models when needed (UI or manual cache).
+- **Offline-first intent:** Whisper/inference uses **local files only** at load time; operators download models via the in-app UI or manual cache for **dev installs**. For **air-gapped USB delivery**, use the Path A bundle under [`packaging/offline/`](../packaging/offline/) (models baked into Docker images; host client sets `MEETING_ASSISTANT_WHISPER_API_URL`).
 - **Ollama** must be **running locally** with a **pulled model** (configurable via env).
 - **Pyannote** models are **gated** on the Hub; terms must be accepted and an **HF token** is required **when speaker diarization is enabled** (off by default).
 - **Windows:** `main.py` prepends CUDA runtime DLL paths from the pinned **`nvidia-*`** wheels so GPU stacks can load reliably ([`nvidia_windows_dlls.py`](../src/meeting_assistant/nvidia_windows_dlls.py)).
@@ -47,6 +47,8 @@ Give users a **single place** to: manage **sessions** (chat-style history), **re
 ## Documentation in the repo
 
 - **[README.md](../README.md)** — setup, env vars, speech cache, quick start.
+- **[OFFLINE_DOCKER_HANDOFF.md](OFFLINE_DOCKER_HANDOFF.md)** — air-gapped USB bundle (Path A: PyInstaller + headless WhisperX).
+- **[packaging/offline/README.md](../packaging/offline/README.md)** — build scripts, compose files, operator runbook source (`RUNBOOK.txt` on USB).
 - **[SRS.md](SRS.md)** — product/architecture requirements aligned with implementation.
 - **[INSTALLATION_AR.md](INSTALLATION_AR.md)** — Arabic Windows installation and migration guide.
 - **[Feature SRS - Speaker Diarization and Alignment.md](Feature SRS - Speaker Diarization and Alignment.md)** — addendum for diarization/alignment (implementation status at top).
@@ -56,7 +58,7 @@ Give users a **single place** to: manage **sessions** (chat-style history), **re
 
 - **Scaling the AI stack** (GPU vs CPU, model sizes, download/cache strategy, diarization cost).
 - **Quality tuning** (alignment language, jargon normalizer, prompt design for Arabic + English technical terms).
-- **Packaging** (PyInstaller/briefcase, shipping WhisperX + CUDA vs CPU-only, FFmpeg bundling).
+- **Packaging** — dev: PyInstaller host client + Docker inference images under `packaging/offline/`; see [OFFLINE_DOCKER_HANDOFF.md](OFFLINE_DOCKER_HANDOFF.md). Topics: shipping WhisperX + CUDA vs CPU-only, FFmpeg bundling, 64 GB+ USB images.
 - **Arabic workflows** (UI vs transcription language, RTL, prompt design).
 
 ---

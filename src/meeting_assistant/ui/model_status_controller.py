@@ -5,11 +5,11 @@ import logging
 from PySide6.QtCore import Property, QObject, QTimer, Signal, Slot
 
 from meeting_assistant import config
+from meeting_assistant.ports.speech_model_status import SpeechModelStatusSource
 from meeting_assistant.services.whisper_cache_integrity import (
     clear_whisper_hub_repo_cache,
     whisper_cache_ui_case,
 )
-from meeting_assistant.services.whisperx_engine import WhisperXEngine
 from meeting_assistant.workers.model_download_worker import ModelDownloadWorker
 
 _log = logging.getLogger(__name__)
@@ -36,7 +36,7 @@ class ModelStatusController(QObject):
     hfTokenConfiguredChanged = Signal()
     lastSpeechFailureKindChanged = Signal()
 
-    def __init__(self, engine: WhisperXEngine, parent=None) -> None:
+    def __init__(self, engine: SpeechModelStatusSource, parent=None) -> None:
         super().__init__(parent)
         self._engine = engine
         self._model_ready = config.USE_MOCK_BACKEND
@@ -105,7 +105,9 @@ class ModelStatusController(QObject):
                         "speaker diarization (accept pyannote model conditions on huggingface.co first)."
                     )
                 )
-        if config.USE_MOCK_BACKEND or self._model_ready:
+        if config.USE_MOCK_BACKEND or self.offlineBundle:
+            pass
+        elif self._model_ready:
             pass
         else:
             case = whisper_cache_ui_case()
@@ -224,6 +226,14 @@ class ModelStatusController(QObject):
     def mockBackend(self) -> bool:
         return bool(config.USE_MOCK_BACKEND)
 
+    @Property(bool, constant=True)
+    def offlineBundle(self) -> bool:
+        return bool(config.OFFLINE_BUNDLE or config.WHISPER_API_URL)
+
+    @Property(bool, constant=True)
+    def remoteWhisperApi(self) -> bool:
+        return bool(config.WHISPER_API_URL)
+
     def _set_ready(self, v: bool) -> None:
         if self._model_ready != v:
             self._model_ready = v
@@ -279,7 +289,7 @@ class ModelStatusController(QObject):
 
     @Slot()
     def startDownload(self) -> None:
-        if config.USE_MOCK_BACKEND:
+        if config.USE_MOCK_BACKEND or self.offlineBundle:
             return
         if self._downloading:
             return
@@ -303,7 +313,7 @@ class ModelStatusController(QObject):
 
     @Slot()
     def clearWhisperModelCache(self) -> None:
-        if config.USE_MOCK_BACKEND or self._downloading:
+        if config.USE_MOCK_BACKEND or self.offlineBundle or self._downloading:
             return
         try:
             clear_whisper_hub_repo_cache()

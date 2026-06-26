@@ -8,7 +8,7 @@ The UI is **Qt Quick (QML)** on **PySide6** 🐍; Python owns persistence, AI ad
 
 **📑 Table of contents**
 
-- [Additional documentation](#additional-documentation) — *links to `docs/` (project overview, SRS, diarization addendum).*
+- [Additional documentation](#additional-documentation) — *links to `docs/`, `packaging/offline/`, and CONTRIBUTING.*
 - [Breaking changes](#breaking-changes) — *SQLite migrations, deprecated env paths, and artifact layout changes.*
 - [Project overview](#project-overview) — *sessions, audio, STT, summarization, artifacts, prompts, pipeline, UI language.*
 - [Models and services](#models-and-services) — *ASR, alignment, diarization, and Ollama summarization stack.*
@@ -17,7 +17,7 @@ The UI is **Qt Quick (QML)** on **PySide6** 🐍; Python owns persistence, AI ad
   - [External tools](#dependencies-external-tools) — *Ollama, FFmpeg, optional GPU.*
   - [PyTorch and CUDA](#dependencies-pytorch-and-cuda) — *CUDA-capable `torch`, verification command, mock mode.*
 - [Install](#install) — *clone, venv, dependencies, FFmpeg & Ollama, optional `.env`.*
-- [Offline Docker handoff](#offline-docker-handoff) — *build once, copy via USB, run without internet on target.*
+- [Offline USB bundle](#offline-docker-handoff) — *Path A: PyInstaller host client + headless WhisperX containers via USB.*
 - [Configuration: `.env`](#configuration-env) — *how `python-dotenv` loads the repo-root `.env` and precedence vs the OS environment.*
 - [`constants.py` (summary)](#constants-py-summary) — *settings keys, defaults, enums, and extension lists.*
 - [Configuration (environment variables)](#configuration-environment-variables) — *full `MEETING_ASSISTANT_*` reference from `config.py`.*
@@ -49,12 +49,13 @@ The UI is **Qt Quick (QML)** on **PySide6** 🐍; Python owns persistence, AI ad
 
 **📚 More documentation**
 
-- 🇸🇦 [docs/INSTALLATION_AR.md](docs/INSTALLATION_AR.md) — دليل عربي مفصّل للتثبيت ونقل المشروع إلى حاسوب آخر (Windows، Whisper، Ollama، WSL).
+- 🇸🇦 [docs/INSTALLATION_AR.md](docs/INSTALLATION_AR.md) — دليل عربي للتثبيت ونقل المشروع (Windows، Whisper، Ollama، حزمة USB Path A).
 - 📄 [docs/PROJECT_DESCRIPTION.md](docs/PROJECT_DESCRIPTION.md) — short consultation-ready overview (purpose, stack, constraints).
 - 📋 [docs/SRS.md](docs/SRS.md) — Software Requirements Specification (intent and architecture).
 - 🎤 [docs/Feature SRS - Speaker Diarization and Alignment.md](docs/Feature%20SRS%20-%20Speaker%20Diarization%20and%20Alignment.md) — diarization and alignment addendum.
 - 🤝 [CONTRIBUTING.md](CONTRIBUTING.md) — development setup, documentation sync rules, PR checklist.
-- 🧊 [docs/OFFLINE_DOCKER_HANDOFF.md](docs/OFFLINE_DOCKER_HANDOFF.md) — USB/offline Docker packaging and runbook (Windows 11).
+- 🧊 [docs/OFFLINE_DOCKER_HANDOFF.md](docs/OFFLINE_DOCKER_HANDOFF.md) — USB/offline Path A packaging and operator runbook.
+- 📦 [packaging/offline/README.md](packaging/offline/README.md) — build scripts, Dockerfiles, and USB bundle layout.
 
 ---
 
@@ -397,34 +398,36 @@ python main.py
 
 <a id="offline-docker-handoff"></a>
 
-## 🧊 Offline Docker handoff
+## 🧊 Offline USB bundle (Path A)
 
-Use this when you need to hand over the app on USB and run without internet downloads on the target laptop.
+Use this when you need to hand over the app on USB and run **without internet** on the target laptop.
 
-Files added under `docker/`:
-
-- `Dockerfile.gpu` (CUDA runtime profile)
-- `Dockerfile.cpu` (CPU fallback profile)
-- `compose.offline.yml` (GPU/CPU run services)
-- `seed_models.py` (preloads Whisper + HF cache at build time)
-- `export_offline.ps1` / `import_and_run_offline.ps1` (USB export/import workflow)
+**Architecture:** native Windows GUI (`MeetingAssistant.exe` via PyInstaller) + headless WhisperX in Docker + Ollama on the host. All packaging lives under [`packaging/offline/`](packaging/offline/).
 
 Quick flow:
 
 ```powershell
-# Source machine (online): build + preload + save tar bundle
-.\docker\export_offline.ps1 -OutputDir .\docker\offline-bundle
+# Source machine (online): build images, PyInstaller exe, assemble USB folder
+.\packaging\offline\scripts\build_usb_bundle.ps1 -OutputDir .\packaging\offline\usb-bundle
 
-# Target machine (offline): load tar files and run
-.\import_and_run_offline.ps1 -BundleDir . -Profile gpu
+# Target machine (offline): load images, start inference, open desktop app
+.\install_from_usb.ps1
+.\launch_host_client.ps1
+
+# Validate bundle after install
+.\accept_offline_bundle.ps1
 ```
 
-Set Ollama endpoint in `.env.offline`:
+Key files in the USB bundle:
 
-- same machine host: `http://host.docker.internal:11434`
-- another device on LAN: `http://<ip-or-hostname>:11434`
+- `RUNBOOK.txt` — operator instructions (read this first on the target machine)
+- `install_from_usb.ps1` / `launch_host_client.ps1`
+- `images/*.tar` — GPU and CPU inference images (models baked in)
+- `.env.bundle` — Ollama URL, Whisper API port, persistent data paths
 
-Detailed runbook: [`docs/OFFLINE_DOCKER_HANDOFF.md`](docs/OFFLINE_DOCKER_HANDOFF.md).
+Defaults: Whisper `large-v3-turbo`, alignment `ar`, API port `18080`, Ollama `http://127.0.0.1:11434`.
+
+Detailed runbook: [`docs/OFFLINE_DOCKER_HANDOFF.md`](docs/OFFLINE_DOCKER_HANDOFF.md) and [`packaging/offline/README.md`](packaging/offline/README.md).
 
 ---
 
@@ -528,7 +531,15 @@ meeting_summary/
 │   ├── SRS.md
 │   ├── PROJECT_DESCRIPTION.md
 │   ├── INSTALLATION_AR.md
+│   ├── OFFLINE_DOCKER_HANDOFF.md
 │   └── Feature SRS - Speaker Diarization and Alignment.md
+├── packaging/
+│   └── offline/                   # Path A USB bundle (Docker images + PyInstaller host client)
+│       ├── README.md              # Operator/dev runbook (copied as RUNBOOK.txt on USB)
+│       ├── images/                # Dockerfile.gpu, Dockerfile.cpu
+│       ├── compose/                 # compose.gpu.yml, compose.cpu.yml
+│       ├── scripts/               # build_usb_bundle.ps1, install_from_usb.ps1, …
+│       └── host-client/           # PyInstaller spec + build_host_client.ps1
 ├── README.md
 ├── CONTRIBUTING.md                # Dev setup, doc sync rules, PR checklist
 ├── scripts/
@@ -598,7 +609,7 @@ Optional: `pip install '.[dev]'` then `ruff check src tests`.
 - **Ollama:** Use `MEETING_ASSISTANT_OLLAMA_BASE_URL` or adjust host/port defaults (Windows **`localhost`**, Linux/macOS **`127.0.0.1`**).
 - **Whisper cache incomplete:** Fill `MEETING_ASSISTANT_WHISPER_CACHE` or use in-app download; check `MEETING_ASSISTANT_WHISPER_MIN_BIN_BYTES` for custom repos 📥.
 - **GPU errors:** Try `MEETING_ASSISTANT_WHISPER_DEVICE=cpu` or tune `MEETING_ASSISTANT_WHISPER_COMPUTE_TYPES`; Windows CUDA DLLs: `nvidia-*` wheels + `nvidia_windows_dlls.py`.
-- **Offline Docker GUI on Windows 11:** If no window appears, verify Docker Desktop runs with WSL2 backend and that `docker/compose.offline.yml` keeps `/mnt/wslg` and `/tmp/.X11-unix` mounts.
+- **Offline USB bundle:** See [Offline USB bundle](#offline-docker-handoff). Run `accept_offline_bundle.ps1` after install to validate API health and offline guards. On Hyper-V Docker Desktop, GPU compose may fail — CPU fallback is automatic.
 - **TorchCodec / pyannote warning on Windows:** Pip TorchCodec may lack native DLLs; WhisperX still decodes via FFmpeg when FFmpeg resolves. Benign warning filtered at startup in `main.py` ⚠️.
 - **HF token:** Required when **speaker diarization** is enabled (Settings or env); accept Hub model terms 🤗. Diarization is off by default — enable it in Settings or set `MEETING_ASSISTANT_SPEAKER_DIARIZATION=1` when you need speaker labels.
 - **pytest import errors:** Set `PYTHONPATH` to **`src`** 🧪.

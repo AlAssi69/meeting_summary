@@ -1,0 +1,34 @@
+services:
+  meeting-assistant-whisper-gpu:
+    image: meeting-assistant:gpu-bundle
+    container_name: meeting-assistant-whisper-gpu
+    ports:
+      - "${WHISPER_API_PORT:-18080}:18080"
+    environment:
+      MEETING_ASSISTANT_OFFLINE_BUNDLE: "1"
+      MEETING_ASSISTANT_SPEAKER_DIARIZATION: "0"
+      MEETING_ASSISTANT_WHISPER_MODEL: ${MEETING_ASSISTANT_WHISPER_MODEL:-large-v3-turbo}
+      MEETING_ASSISTANT_WHISPER_ALIGN_LANGUAGE: ${MEETING_ASSISTANT_WHISPER_ALIGN_LANGUAGE:-ar}
+      MEETING_ASSISTANT_WHISPER_DEVICE: cuda
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      WHISPER_API_PORT: "18080"
+    volumes:
+      - meeting_assistant_inference_scratch:/opt/meeting-assistant/data
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:18080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+    restart: unless-stopped
+
+volumes:
+  meeting_assistant_inference_scratch:

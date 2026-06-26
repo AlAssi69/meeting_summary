@@ -20,7 +20,7 @@
 12. [تشغيل التطبيق](#تشغيل-التطبيق)
 13. [قائمة التحقق النهائية قبل أول استخدام](#قائمة-التحقق-النهائية-قبل-أول-استخدام)
 14. [استكشاف الأخطاء الشائعة](#استكشاف-الأخطاء-الشائعة)
-15. [التسليم بدون إنترنت عبر Docker + USB](#التسليم-بدون-إنترنت-عبر-docker--usb)
+15. [التسليم بدون إنترنت عبر USB (Path A)](#التسليم-بدون-إنترنت-عبر-usb-path-a)
 16. [مراجع إضافية](#مراجع-إضافية)
 
 ---
@@ -1080,33 +1080,93 @@ pytest
 
 ---
 
-<a id="التسليم-بدون-إنترنت-عبر-docker--usb"></a>
+<a id="التسليم-بدون-إنترنت-عبر-usb-path-a"></a>
 
-## التسليم بدون إنترنت عبر Docker + USB
+## التسليم بدون إنترنت عبر USB (Path A)
 
-إذا هدفك نقل التطبيق إلى جهاز آخر بدون تنزيل أي شيء من الإنترنت وقت التشغيل:
+إذا كان هدفك نقل التطبيق إلى جهاز آخر **بدون أي تنزيل من الإنترنت** وقت التشغيل، استخدم حزمة USB الجاهزة تحت [`packaging/offline/`](../packaging/offline/). لم يعد المستودع يستخدم مجلد `docker/` القديم.
 
-1. على الجهاز المصدر (متصل بالإنترنت) شغّل:
+### البنية (Path A)
+
+| المكوّن | أين يعمل |
+|---------|----------|
+| واجهة سطح المكتب (`MeetingAssistant.exe`)، الميكروفون، SQLite، مخرجات الاجتماعات | **Windows** (ملف PyInstaller على الجهاز المضيف) |
+| WhisperX (تفريغ الصوت) | **حاوية Docker** على المنفذ `18080` |
+| Ollama (التلخيص) | **Windows** محلياً (`http://127.0.0.1:11434`) |
+
+النماذج **مدمجة مسبقاً** داخل صورتي GPU و CPU عند البناء. الافتراضي: `large-v3-turbo`، محاذاة `ar`، تمييز المتحدثين **معطّل**.
+
+### على الجهاز المصدر (متصل بالإنترنت)
+
+من جذر المستودع:
 
 ```powershell
-.\docker\export_offline.ps1 -OutputDir .\docker\offline-bundle
+.\packaging\offline\scripts\build_usb_bundle.ps1 -OutputDir .\packaging\offline\usb-bundle
 ```
 
-2. انسخ مجلد `docker/offline-bundle` إلى USB.
-3. على الجهاز الهدف (بدون إنترنت):
-   - انسخ المجلد محلياً.
-   - عدّل `.env.offline` وحدد عنوان Ollama الخارجي:
-     - على نفس الجهاز: `http://host.docker.internal:11434`
-     - على جهاز آخر بالشبكة: `http://192.168.1.50:11434`
-   - شغّل:
+ينتج مجلد `usb-bundle` يحتوي على:
+
+- `images/meeting-assistant-gpu-bundle.tar` و `images/meeting-assistant-cpu-bundle.tar`
+- `bin/MeetingAssistant.exe`
+- `compose/compose.gpu.yml` و `compose/compose.cpu.yml`
+- `.env.bundle` و `install_from_usb.ps1` و `launch_host_client.ps1` و `accept_offline_bundle.ps1`
+- **`RUNBOOK.txt`** — دليل المشغّل (انسخه مع الحزمة)
+
+انسخ **المجلد بالكامل** إلى USB (يُنصح بسعة **64 GB+**).
+
+### على الجهاز الهدف (بدون إنترنت)
+
+**المتطلبات:** Windows 10/11، Docker Desktop (وضع Hyper-V مقبول)، Ollama مثبتاً والنموذج مُسحوباً مسبقاً (مثل `gemma4:e4b128k`).
+
+1. انسخ الحزمة من USB إلى قرص محلي (مثلاً `C:\MeetingAssistantBundle`).
+2. اقرأ **`RUNBOOK.txt`** في مجلد الحزمة.
+3. شغّل:
 
 ```powershell
-.\import_and_run_offline.ps1 -BundleDir . -Profile gpu
+cd C:\MeetingAssistantBundle
+.\install_from_usb.ps1
 ```
 
-> إن لم تتوفر GPU أو حصلت مشاكل CUDA، استخدم `-Profile cpu`.
+يقوم السكربت بـ `docker load`، ثم يحاول ملف **GPU**، ويفحص `http://127.0.0.1:18080/health`، وإن فشل (شائع على Hyper-V بدون تمرير GPU) ينتقل تلقائياً إلى ملف **CPU**.
 
-مستند مفصّل: [docs/OFFLINE_DOCKER_HANDOFF.md](OFFLINE_DOCKER_HANDOFF.md)
+4. تحقق من الحزمة:
+
+```powershell
+.\accept_offline_bundle.ps1
+# اختياري: مع ملف صوت و Ollama
+.\accept_offline_bundle.ps1 -TestAudioPath .\sample.wav -CheckOllama
+```
+
+5. شغّل التطبيق:
+
+```powershell
+.\launch_host_client.ps1
+```
+
+قد يظهر تحذير SmartScreen — اختر «مزيد من المعلومات» ثم «تشغيل على أي حال» (الملف غير موقّع).
+
+### البيانات الدائمة على الجهاز المضيف
+
+| المسار | الغرض |
+|--------|--------|
+| `{bundle}\data\` | SQLite (`MEETING_ASSISTANT_DATA_DIR`) |
+| `{bundle}\meeting_outputs\` | التسجيلات والنصوص والملخصات (`MEETING_ASSISTANT_OUTPUT_ROOT`) |
+
+يُنشئ `install_from_usb.ps1` هذه المجلدات ويضبطها في `.env.bundle`.
+
+### Ollama
+
+التطبيق على Windows يتصل بـ Ollama مباشرة (ليس عبر `host.docker.internal`). الافتراضي في `.env.bundle`:
+
+```env
+MEETING_ASSISTANT_OLLAMA_BASE_URL=http://127.0.0.1:11434
+MEETING_ASSISTANT_OLLAMA_MODEL=gemma4:e4b128k
+```
+
+### مراجع إضافية
+
+- [docs/OFFLINE_DOCKER_HANDOFF.md](OFFLINE_DOCKER_HANDOFF.md) — دليل إنجليزي مفصّل
+- [packaging/offline/README.md](../packaging/offline/README.md) — مرجع المطوّر والمشغّل
 
 ---
 
@@ -1122,9 +1182,10 @@ pytest
 | [docs/PROJECT_DESCRIPTION.md](PROJECT_DESCRIPTION.md) | نظرة عامة على المشروع |
 | [docs/SRS.md](SRS.md) | مواصفات المتطلبات |
 | [docs/Feature SRS - Speaker Diarization and Alignment.md](Feature%20SRS%20-%20Speaker%20Diarization%20and%20Alignment.md) | ملحق التفريغ متعدد المتحدثين والمحاذاة |
-| [docs/OFFLINE_DOCKER_HANDOFF.md](OFFLINE_DOCKER_HANDOFF.md) | دليل حزم Docker بدون إنترنت والنقل عبر USB |
+| [docs/OFFLINE_DOCKER_HANDOFF.md](OFFLINE_DOCKER_HANDOFF.md) | دليل حزمة USB بدون إنترنت (Path A: PyInstaller + WhisperX في Docker) |
+| [packaging/offline/README.md](../packaging/offline/README.md) | مرجع `packaging/offline/` وبناء الحزمة |
 | [CONTRIBUTING.md](../CONTRIBUTING.md) | إرشادات المساهمة ومزامنة الوثائق مع الكود |
 
 ---
 
-**آخر تحديث:** 2026-06-23 — يتوافق هذا الدليل مع هيكل المستودع الحالي (PySide6 + WhisperX + Ollama). عند تغيير الإصدارات أو المسارات في الكود، راجع `config.py` و `README.md` و [CONTRIBUTING.md](../CONTRIBUTING.md) للتأكد من التطابق.
+**آخر تحديث:** 2026-06-26 — يتوافق هذا الدليل مع هيكل المستودع الحالي (PySide6 + WhisperX + Ollama، وحزمة USB تحت `packaging/offline/`). عند تغيير الإصدارات أو المسارات في الكود، راجع `config.py` و `README.md` و [CONTRIBUTING.md](../CONTRIBUTING.md) للتأكد من التطابق.
