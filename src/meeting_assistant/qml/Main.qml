@@ -1125,6 +1125,7 @@ ApplicationWindow {
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 8
+                    visible: !app.modelStatusController.offlineBundle
                     ChromeButton {
                         text: app.modelStatusController.downloading ? qsTr("Downloading…") : qsTr("Download / resume")
                         enabled: !app.modelStatusController.modelReady && !app.modelStatusController.downloading

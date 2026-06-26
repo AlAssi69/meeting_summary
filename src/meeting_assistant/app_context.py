@@ -9,7 +9,12 @@ from meeting_assistant.adapters.mock_transcription import MockTranscriptionAdapt
 from meeting_assistant.adapters.ollama_adapter import OllamaSummarizationAdapter
 from meeting_assistant.adapters.sqlite_session_repository import SqliteSessionRepository
 from meeting_assistant.adapters.whisperx_adapter import WhisperXTranscriptionAdapter
+from meeting_assistant.adapters.whisperx_http_adapter import (
+    RemoteWhisperStatusClient,
+    WhisperHttpTranscriptionAdapter,
+)
 from meeting_assistant.ports.session_repository import SessionRepository
+from meeting_assistant.ports.speech_model_status import SpeechModelStatusSource
 from meeting_assistant.ports.summarization import SummarizationPort
 from meeting_assistant.ports.transcription import TranscriptionPort
 from meeting_assistant.services.hf_token import (
@@ -45,16 +50,32 @@ def build_app_facade(engine: QQmlApplicationEngine) -> AppFacade:
     def _diarization_resolver() -> bool:
         return resolve_speaker_diarization_enabled(repo)
 
-    speech_engine = WhisperXEngine(
-        token_resolver=_token_resolver,
-        diarization_resolver=_diarization_resolver,
-        audio_preparer=build_transcription_audio_preparer(),
-    )
+    speech_status: SpeechModelStatusSource
     if config.USE_MOCK_BACKEND:
         transcription: TranscriptionPort = MockTranscriptionAdapter()
+        speech_engine = WhisperXEngine(
+            token_resolver=_token_resolver,
+            diarization_resolver=_diarization_resolver,
+            audio_preparer=build_transcription_audio_preparer(),
+        )
+        speech_status = speech_engine
+    elif config.WHISPER_API_URL:
+        transcription = WhisperHttpTranscriptionAdapter(
+            config.WHISPER_API_URL,
+            hf_token_resolver=_token_resolver,
+            diarization_resolver=_diarization_resolver,
+        )
+        speech_status = RemoteWhisperStatusClient(config.WHISPER_API_URL)
     else:
+        speech_engine = WhisperXEngine(
+            token_resolver=_token_resolver,
+            diarization_resolver=_diarization_resolver,
+            audio_preparer=build_transcription_audio_preparer(),
+        )
         transcription = WhisperXTranscriptionAdapter(speech_engine)
+        speech_status = speech_engine
+
     summarization = build_summarization()
-    model_status = ModelStatusController(speech_engine)
+    model_status = ModelStatusController(speech_status)
     locale = LocaleController(repo, engine)
     return AppFacade(repo, transcription, summarization, model_status, locale)

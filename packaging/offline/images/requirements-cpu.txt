@@ -1,0 +1,2 @@
+# CPU PyTorch for CPU inference image.
+torch>=2.0,<3

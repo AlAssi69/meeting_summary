@@ -67,6 +67,12 @@ else:
 # Set MEETING_ASSISTANT_MOCK=0 to use SQLite + WhisperX + Ollama.
 USE_MOCK_BACKEND: bool = _env_bool("MEETING_ASSISTANT_MOCK", False)
 
+# Offline USB bundle: disable Hub downloads in the UI; models live in the inference container.
+OFFLINE_BUNDLE: bool = _env_bool("MEETING_ASSISTANT_OFFLINE_BUNDLE", False)
+
+# Path A host client: headless WhisperX HTTP service (no local torch/whisperx on host).
+WHISPER_API_URL: str = os.environ.get("MEETING_ASSISTANT_WHISPER_API_URL", "").strip().rstrip("/")
+
 def _hf_access_token_from_env() -> str:
     """HF token: first non-empty among app-specific and common Hub env names (after ``.env`` load)."""
     for key in (

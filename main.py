@@ -7,13 +7,21 @@ import warnings
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-SRC = ROOT / "src"
-sys.path.insert(0, str(SRC))
+_FROZEN = getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS")
+if _FROZEN:
+    SRC = Path(sys._MEIPASS)  # type: ignore[attr-defined]
+    sys.path.insert(0, str(SRC))
+else:
+    SRC = ROOT / "src"
+    sys.path.insert(0, str(SRC))
 
 if sys.platform == "win32":
-    from meeting_assistant.nvidia_windows_dlls import ensure_nvidia_pip_dll_directories
+    from meeting_assistant import config as _early_config
 
-    ensure_nvidia_pip_dll_directories()
+    if not _early_config.WHISPER_API_URL:
+        from meeting_assistant.nvidia_windows_dlls import ensure_nvidia_pip_dll_directories
+
+        ensure_nvidia_pip_dll_directories()
 
 from meeting_assistant import config as _ma_config
 from meeting_assistant.logging_setup import configure_logging
@@ -26,7 +34,7 @@ warnings.filterwarnings("ignore", category=UserWarning, module=r"pyannote\.audio
 
 
 def _warn_if_cuda_requested_but_unavailable() -> None:
-    if _ma_config.USE_MOCK_BACKEND:
+    if _ma_config.USE_MOCK_BACKEND or _ma_config.WHISPER_API_URL:
         return
     try:
         import torch

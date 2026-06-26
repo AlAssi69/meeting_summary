@@ -4,7 +4,7 @@
 
 **Operational reference:** For environment variables, defaults, and runbooks, see [README.md](../README.md). This SRS states product intent and architecture; the README stays aligned with `src/meeting_assistant/config.py` and deployment details.
 
-**Related docs:** [PROJECT_DESCRIPTION.md](PROJECT_DESCRIPTION.md) · [INSTALLATION_AR.md](INSTALLATION_AR.md) · [Feature SRS - Speaker Diarization and Alignment.md](Feature%20SRS%20-%20Speaker%20Diarization%20and%20Alignment.md)
+**Related docs:** [PROJECT_DESCRIPTION.md](PROJECT_DESCRIPTION.md) · [INSTALLATION_AR.md](INSTALLATION_AR.md) · [OFFLINE_DOCKER_HANDOFF.md](OFFLINE_DOCKER_HANDOFF.md) · [Feature SRS - Speaker Diarization and Alignment.md](Feature%20SRS%20-%20Speaker%20Diarization%20and%20Alignment.md)
 
 ---
 
@@ -42,6 +42,7 @@ A **mock backend** (environment-controlled) may substitute stub transcription, s
 * **STT:** **WhisperX** (CTranslate2 ASR via faster-whisper-compatible weights, forced alignment, optional pyannote diarization and speaker assignment when enabled). Models are loaded with **local files only** at inference (no implicit Hub download). When diarization is enabled, operators must supply a **Hugging Face token** accepted for the gated pyannote models used by the installed **whisperx** version. Model cache and download behavior are described in the README.
 * **LLM:** **Ollama** HTTP API (`/api/chat`).
 * **Ollama addressing:** Default host is **`localhost` on Windows** and **`127.0.0.1` on Linux/macOS** (see `config.py`; Windows default targets typical WSL2 port-forwarding). Port is configurable; default **11434**. Override with **`MEETING_ASSISTANT_OLLAMA_HOST`** / **`MEETING_ASSISTANT_OLLAMA_PORT`**, or set **`MEETING_ASSISTANT_OLLAMA_BASE_URL`** to a full base URL (overrides host/port). Details are documented in the README.
+* **Deployment (air-gapped USB):** For Windows targets without runtime internet, operators may use the **Path A** bundle under [`packaging/offline/`](../packaging/offline/): a **PyInstaller** host client (GUI, mic, SQLite) plus **headless WhisperX** in Docker, with **Ollama** on the host. See [OFFLINE_DOCKER_HANDOFF.md](OFFLINE_DOCKER_HANDOFF.md) and [README.md](../README.md) § Offline USB bundle.
 
 **2.4 Data storage (SQLite)**
 
