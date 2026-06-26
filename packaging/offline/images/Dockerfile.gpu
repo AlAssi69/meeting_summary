@@ -42,7 +42,8 @@ COPY main.py ./main.py
 COPY packaging ./packaging
 COPY packaging/offline/scripts/entrypoint.sh /usr/local/bin/meeting-assistant-entrypoint.sh
 
-RUN chmod +x /usr/local/bin/meeting-assistant-entrypoint.sh && \
+RUN sed -i 's/\r$//' /usr/local/bin/meeting-assistant-entrypoint.sh && \
+    chmod +x /usr/local/bin/meeting-assistant-entrypoint.sh && \
     mkdir -p /opt/meeting-assistant/models/whisper /opt/meeting-assistant/models/hf
 
 ARG PRELOAD_MODELS=1

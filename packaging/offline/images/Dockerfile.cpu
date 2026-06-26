@@ -30,16 +30,19 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 COPY packaging/offline/images/requirements-container.txt ./packaging/offline/images/requirements-container.txt
 COPY packaging/offline/images/requirements-cpu.txt ./packaging/offline/images/requirements-cpu.txt
+# Install CPU torch first so whisperx (requirements-container.txt) does not pull CUDA wheels from PyPI.
+# Index URL lives in requirements-cpu.txt only — do not pass --extra-index-url here.
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --default-timeout=1000 --no-cache-dir -r packaging/offline/images/requirements-container.txt && \
-    pip install --default-timeout=1000 --no-cache-dir -r packaging/offline/images/requirements-cpu.txt
+    pip install --default-timeout=1000 --no-cache-dir -r packaging/offline/images/requirements-cpu.txt && \
+    pip install --default-timeout=1000 --no-cache-dir -r packaging/offline/images/requirements-container.txt
 
 COPY src ./src
 COPY main.py ./main.py
 COPY packaging ./packaging
 COPY packaging/offline/scripts/entrypoint.sh /usr/local/bin/meeting-assistant-entrypoint.sh
 
-RUN chmod +x /usr/local/bin/meeting-assistant-entrypoint.sh && \
+RUN sed -i 's/\r$//' /usr/local/bin/meeting-assistant-entrypoint.sh && \
+    chmod +x /usr/local/bin/meeting-assistant-entrypoint.sh && \
     mkdir -p /opt/meeting-assistant/models/whisper /opt/meeting-assistant/models/hf
 
 ARG PRELOAD_MODELS=1

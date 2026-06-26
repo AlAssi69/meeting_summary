@@ -1,2 +1,6 @@
-# CPU PyTorch for CPU inference image.
-torch>=2.0,<3
+# CPU PyTorch wheels for CPU inference image (install before requirements-container.txt).
+# Linux PyPI defaults can resolve to CUDA wheels; the CPU index avoids nvidia-* downloads.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.8.0
+torchaudio==2.8.0
+torchvision==0.23.0
