@@ -1,0 +1,47 @@
+# syntax=docker/dockerfile:1
+FROM ollama/ollama:latest
+
+# Offline summarization service. At build time we:
+#   1. Pull the base model (OLLAMA_BASE_MODEL, e.g. gemma4:e4b).
+#   2. Derive a long-context variant (OLLAMA_MODEL, e.g. gemma4:e4b128k) by creating a new
+#      model from a Modelfile that sets `num_ctx` to OLLAMA_NUM_CTX (~128k tokens).
+# Both are baked into the image, so the target machine needs no Ollama install and no pull.
+# The derived model shares weight blobs with the base (Ollama de-duplicates), so the extra
+# size is negligible. The application uses OLLAMA_MODEL.
+#
+# `ollama create -f Modelfile` is the documented, trustworthy way to persist parameter
+# overrides (num_ctx) as a named model — preferable to a transient `ollama run` session.
+ENV OLLAMA_HOST=0.0.0.0:11434
+
+ARG OLLAMA_BASE_MODEL=gemma4:e4b
+ARG OLLAMA_MODEL=gemma4:e4b128k
+ARG OLLAMA_NUM_CTX=131072
+ENV MEETING_ASSISTANT_OLLAMA_MODEL=${OLLAMA_MODEL}
+
+# Start the server transiently, pull the base model, derive the long-context model, then stop.
+# The pulled/created blobs persist in this image layer.
+RUN set -eu; \
+    ollama serve & \
+    server_pid=$!; \
+    for _ in $(seq 1 60); do \
+      if ollama list >/dev/null 2>&1; then break; fi; \
+      sleep 1; \
+    done; \
+    echo "[ollama-build] Pulling base model ${OLLAMA_BASE_MODEL}..."; \
+    ollama pull "${OLLAMA_BASE_MODEL}"; \
+    echo "[ollama-build] Deriving ${OLLAMA_MODEL} with num_ctx=${OLLAMA_NUM_CTX}..."; \
+    printf 'FROM %s\nPARAMETER num_ctx %s\n' "${OLLAMA_BASE_MODEL}" "${OLLAMA_NUM_CTX}" > /tmp/Modelfile; \
+    cat /tmp/Modelfile; \
+    ollama create "${OLLAMA_MODEL}" -f /tmp/Modelfile; \
+    rm -f /tmp/Modelfile; \
+    ollama list; \
+    kill "${server_pid}"; \
+    wait "${server_pid}" 2>/dev/null || true
+
+EXPOSE 11434
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=5 \
+  CMD ollama list || exit 1
+
+# Inherit the base image ENTRYPOINT (/bin/ollama); run the server by default.
+CMD ["serve"]

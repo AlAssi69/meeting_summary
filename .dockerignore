@@ -1,0 +1,52 @@
+# Keep the Docker build context small and avoid baking large/irrelevant files into images.
+
+# Version control / IDE
+.git
+.gitignore
+.idea
+.vscode
+
+# Python virtualenvs and caches
+.venv
+.venv-host-client
+__pycache__
+*.py[cod]
+.mypy_cache
+.ruff_cache
+.pytest_cache
+.hypothesis
+.cache
+.uv
+
+# Build / packaging outputs
+dist
+build
+*.egg-info
+
+# The assembled USB bundle: contains multi-GB image tars and the host .exe — never send to the daemon.
+packaging/offline/usb-bundle/
+
+# Host client build assets (not used inside containers)
+packaging/offline/host-client/
+
+# Local model caches / weights (models are downloaded at build time by preload_models.py)
+models/whisper/
+models/hf/
+
+# Local meeting artifacts and databases
+meeting_outputs/
+*.sqlite
+*.sqlite3
+*.db
+
+# Environment files (never bake secrets into images)
+.env
+.env.*
+
+# OS noise
+.DS_Store
+Thumbs.db
+
+# Docs and tests are not needed in the runtime image
+tests/
+docs/

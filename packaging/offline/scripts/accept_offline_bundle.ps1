@@ -32,16 +32,8 @@ function Import-DotEnvFile {
 
 function Get-ActiveContainerName {
     param([string]$Root)
-    $profilePath = Join-Path $Root ".active_profile"
-    if (Test-Path $profilePath) {
-        $profile = (Get-Content $profilePath -Raw).Trim().ToLower()
-        if ($profile -eq "gpu") { return "meeting-assistant-whisper-gpu" }
-        if ($profile -eq "cpu") { return "meeting-assistant-whisper-cpu" }
-    }
-    $gpu = docker ps --filter "name=meeting-assistant-whisper-gpu" --format "{{.Names}}" 2>$null
-    if ($gpu) { return $gpu.Trim() }
-    $cpu = docker ps --filter "name=meeting-assistant-whisper-cpu" --format "{{.Names}}" 2>$null
-    if ($cpu) { return $cpu.Trim() }
+    $name = docker ps --filter "name=meeting-assistant-whisper" --format "{{.Names}}" 2>$null
+    if ($name) { return ($name | Select-Object -First 1).Trim() }
     return ""
 }
 
@@ -126,7 +118,7 @@ if (Test-Path $profilePath) {
 # --- 4. Offline / Hugging Face guards (container env + local-only cache probe) ---
 $containerName = Get-ActiveContainerName -Root $bundleDir
 if (-not $containerName) {
-    Write-Fail "No running inference container (meeting-assistant-whisper-gpu/cpu)"
+    Write-Fail "No running inference container (meeting-assistant-whisper)"
     $failures++
 } else {
     Write-Pass "Inference container running: $containerName"
@@ -227,29 +219,39 @@ if ($TestAudioPath) {
     }
 }
 
-# --- 7. Optional Ollama probe ---
-if ($CheckOllama) {
-    $ollamaUrl = if ($env:MEETING_ASSISTANT_OLLAMA_BASE_URL) {
-        $env:MEETING_ASSISTANT_OLLAMA_BASE_URL.TrimEnd("/")
-    } else {
-        "http://127.0.0.1:11434"
-    }
-    try {
-        $tags = Invoke-RestMethod -Uri "$ollamaUrl/api/tags" -TimeoutSec $TimeoutSec
-        Write-Pass "Ollama reachable at $ollamaUrl/api/tags"
-        $modelName = $env:MEETING_ASSISTANT_OLLAMA_MODEL
-        if ($modelName -and $tags.models) {
-            $names = $tags.models | ForEach-Object { $_.name }
-            if ($names -contains $modelName) {
-                Write-Pass "Ollama model present: $modelName"
-            } else {
-                Write-Host "[WARN] Configured Ollama model '$modelName' not in /api/tags. Available: $($names -join ', ')" -ForegroundColor Yellow
-            }
+# --- 7. Containerized Ollama (baked model) ---
+$ollamaContainer = docker ps --filter "name=meeting-assistant-ollama" --format "{{.Names}}" 2>$null
+if ($ollamaContainer) {
+    Write-Pass "Ollama container running: $(($ollamaContainer | Select-Object -First 1).Trim())"
+} else {
+    Write-Fail "Ollama container (meeting-assistant-ollama) is not running"
+    $failures++
+}
+
+$ollamaUrl = if ($env:MEETING_ASSISTANT_OLLAMA_BASE_URL) {
+    $env:MEETING_ASSISTANT_OLLAMA_BASE_URL.TrimEnd("/")
+} else {
+    "http://127.0.0.1:11434"
+}
+try {
+    $tags = Invoke-RestMethod -Uri "$ollamaUrl/api/tags" -TimeoutSec $TimeoutSec
+    Write-Pass "Ollama reachable at $ollamaUrl/api/tags"
+    $modelName = $env:MEETING_ASSISTANT_OLLAMA_MODEL
+    if ($modelName) {
+        $names = @()
+        if ($tags.models) { $names = $tags.models | ForEach-Object { $_.name } }
+        # Accept exact match or the same model without an explicit ":latest" tag.
+        $matched = ($names -contains $modelName) -or ($names -contains "$modelName`:latest")
+        if ($matched) {
+            Write-Pass "Ollama baked model present: $modelName"
+        } else {
+            Write-Fail "Configured Ollama model '$modelName' not baked in. Available: $($names -join ', ')"
+            $failures++
         }
-    } catch {
-        Write-Fail "Ollama probe failed at $ollamaUrl - $_"
-        $failures++
     }
+} catch {
+    Write-Fail "Ollama probe failed at $ollamaUrl - $_"
+    $failures++
 }
 
 # --- Summary ---

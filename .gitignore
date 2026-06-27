@@ -40,3 +40,5 @@ __pypackages__/
 
 # Portable Whisper weights (keep models/.gitkeep; ignore hub cache contents)
 models/whisper/
+
+*.exe

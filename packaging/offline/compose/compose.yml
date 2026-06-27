@@ -1,7 +1,10 @@
+# Base (CPU-safe) profile: WhisperX inference API + offline Ollama summarization.
+# Run on CPU:  docker compose -f compose.yml up -d
+# Run on GPU:  docker compose -f compose.yml -f compose.gpu.yml up -d
 services:
-  meeting-assistant-whisper-cpu:
+  whisper:
     image: meeting-assistant:cpu-bundle
-    container_name: meeting-assistant-whisper-cpu
+    container_name: meeting-assistant-whisper
     ports:
       - "${WHISPER_API_PORT:-18080}:18080"
     environment:
@@ -13,8 +16,6 @@ services:
       HF_HUB_OFFLINE: "1"
       TRANSFORMERS_OFFLINE: "1"
       WHISPER_API_PORT: "18080"
-    volumes:
-      - meeting_assistant_inference_scratch:/opt/meeting-assistant/data
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:18080/health"]
       interval: 15s
@@ -23,5 +24,22 @@ services:
       start_period: 120s
     restart: unless-stopped
 
+  ollama:
+    image: meeting-assistant:ollama-bundle
+    container_name: meeting-assistant-ollama
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+    volumes:
+      - meeting_assistant_ollama:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
 volumes:
-  meeting_assistant_inference_scratch:
+  meeting_assistant_ollama:

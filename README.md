@@ -188,7 +188,13 @@ Activate:
 pip install -r requirements.txt
 ```
 
-4. 🎬 **Install FFmpeg** and 🦙 **Ollama** on the host; pull your chosen Ollama model (must match or exceed what you set in `MEETING_ASSISTANT_OLLAMA_MODEL`).
+4. 🎬 **Install FFmpeg** and 🦙 **Ollama** on the host, then provide the model named in `MEETING_ASSISTANT_OLLAMA_MODEL`. The default `gemma4:e4b128k` is a **derived** long-context model — create it from the base `gemma4:e4b` (don't `ollama pull gemma4:e4b128k`):
+
+```bash
+ollama pull gemma4:e4b
+printf 'FROM gemma4:e4b\nPARAMETER num_ctx 131072\n' > Modelfile
+ollama create gemma4:e4b128k -f Modelfile
+```
 
 5. **Optional:** 📋 copy [`.env.example`](.env.example) to **`.env`** in the repo root and set variables (never commit `.env`).
 
@@ -402,7 +408,7 @@ python main.py
 
 Use this when you need to hand over the app on USB and run **without internet** on the target laptop.
 
-**Architecture:** native Windows GUI (`MeetingAssistant.exe` via PyInstaller) + headless WhisperX in Docker + Ollama on the host. All packaging lives under [`packaging/offline/`](packaging/offline/).
+**Architecture:** native Windows GUI (`MeetingAssistant.exe` via PyInstaller) + headless WhisperX in Docker + Ollama in Docker (model baked in). The only prerequisite on the target is **Docker Desktop**. GPU is best-effort with automatic CPU fallback. All packaging lives under [`packaging/offline/`](packaging/offline/).
 
 Quick flow:
 
@@ -422,10 +428,11 @@ Key files in the USB bundle:
 
 - `RUNBOOK.txt` — operator instructions (read this first on the target machine)
 - `install_from_usb.ps1` / `launch_host_client.ps1`
-- `images/*.tar` — GPU and CPU inference images (models baked in)
+- `images/*.tar` — GPU + CPU WhisperX images and the Ollama image (all models baked in)
+- `compose/compose.yml` (base) + `compose/compose.gpu.yml` (GPU override)
 - `.env.bundle` — Ollama URL, Whisper API port, persistent data paths
 
-Defaults: Whisper `large-v3-turbo`, alignment `ar`, API port `18080`, Ollama `http://127.0.0.1:11434`.
+Defaults: Whisper `large-v3-turbo`, alignment `ar`, API port `18080`, Ollama `http://127.0.0.1:11434` with derived model `gemma4:e4b128k` (`num_ctx` 131072, from base `gemma4:e4b`).
 
 Detailed runbook: [`docs/OFFLINE_DOCKER_HANDOFF.md`](docs/OFFLINE_DOCKER_HANDOFF.md) and [`packaging/offline/README.md`](packaging/offline/README.md).
 
@@ -536,8 +543,8 @@ meeting_summary/
 ├── packaging/
 │   └── offline/                   # Path A USB bundle (Docker images + PyInstaller host client)
 │       ├── README.md              # Operator/dev runbook (copied as RUNBOOK.txt on USB)
-│       ├── images/                # Dockerfile.gpu, Dockerfile.cpu
-│       ├── compose/                 # compose.gpu.yml, compose.cpu.yml
+│       ├── images/                # Dockerfile.gpu, Dockerfile.cpu, Dockerfile.ollama
+│       ├── compose/                 # compose.yml (base), compose.gpu.yml (override)
 │       ├── scripts/               # build_usb_bundle.ps1, install_from_usb.ps1, …
 │       └── host-client/           # PyInstaller spec + build_host_client.ps1
 ├── README.md

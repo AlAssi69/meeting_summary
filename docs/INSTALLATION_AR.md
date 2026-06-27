@@ -418,10 +418,12 @@ copy .env.example .env
 باختصار:
 
 1. ثبّت Ollama من [ollama.com](https://ollama.com/).
-2. اسحب النموذج الافتراضي:
+2. اسحب النموذج الأساس ثم اشتق منه نسخة بسياق 128k (هذه هي التي يستخدمها التطبيق):
 
 ```powershell
-ollama pull gemma4:e4b128k
+ollama pull gemma4:e4b
+"FROM gemma4:e4b`nPARAMETER num_ctx 131072" | Out-File -Encoding ascii Modelfile
+ollama create gemma4:e4b128k -f Modelfile
 ```
 
 ---
@@ -747,10 +749,13 @@ ollama list
 
 ### الخطوة 3: سحب النموذج المطلوب
 
-النموذج الافتراضي في التطبيق: **`gemma4:e4b128k`**
+النموذج الافتراضي في التطبيق هو **`gemma4:e4b128k`**، وهو نموذج **مشتق** بسياق طويل (128k). الطريقة الصحيحة: اسحب النموذج الأساس `gemma4:e4b`، ثم أنشئ منه `gemma4:e4b128k` مع `num_ctx = 131072` عبر `ollama create` وملف Modelfile:
 
 ```powershell
-ollama pull gemma4:e4b128k
+ollama pull gemma4:e4b
+"FROM gemma4:e4b`nPARAMETER num_ctx 131072" | Out-File -Encoding ascii Modelfile
+ollama create gemma4:e4b128k -f Modelfile
+ollama list   # يجب أن يظهر gemma4:e4b128k
 ```
 
 إذا استخدمت نموذجاً آخر، عيّنه في `.env`:
@@ -834,10 +839,12 @@ curl -fsSL https://ollama.com/install.sh | sh
 ollama serve
 ```
 
-4. في نافذة WSL أخرى، اسحب النموذج:
+4. في نافذة WSL أخرى، اسحب النموذج الأساس واشتق نسخة الـ 128k:
 
 ```bash
-ollama pull gemma4:e4b128k
+ollama pull gemma4:e4b
+printf 'FROM gemma4:e4b\nPARAMETER num_ctx 131072\n' > Modelfile
+ollama create gemma4:e4b128k -f Modelfile
 ```
 
 5. تحقق:
@@ -1092,9 +1099,9 @@ pytest
 |---------|----------|
 | واجهة سطح المكتب (`MeetingAssistant.exe`)، الميكروفون، SQLite، مخرجات الاجتماعات | **Windows** (ملف PyInstaller على الجهاز المضيف) |
 | WhisperX (تفريغ الصوت) | **حاوية Docker** على المنفذ `18080` |
-| Ollama (التلخيص) | **Windows** محلياً (`http://127.0.0.1:11434`) |
+| Ollama (التلخيص، النموذج مدمج مسبقاً) | **حاوية Docker** على المنفذ `11434` |
 
-النماذج **مدمجة مسبقاً** داخل صورتي GPU و CPU عند البناء. الافتراضي: `large-v3-turbo`، محاذاة `ar`، تمييز المتحدثين **معطّل**.
+نماذج Whisper **مدمجة مسبقاً** داخل صورتي GPU و CPU، ونموذج Ollama **مدمج مسبقاً** داخل صورة Ollama، عند البناء. الافتراضي: `large-v3-turbo`، محاذاة `ar`، تمييز المتحدثين **معطّل**. استخدام الـ GPU **أفضل-جهد**: يُستخدم عند توفّره وإلا يعمل كل شيء على الـ CPU.
 
 ### على الجهاز المصدر (متصل بالإنترنت)
 
@@ -1106,17 +1113,17 @@ pytest
 
 ينتج مجلد `usb-bundle` يحتوي على:
 
-- `images/meeting-assistant-gpu-bundle.tar` و `images/meeting-assistant-cpu-bundle.tar`
+- `images/meeting-assistant-gpu-bundle.tar` و `images/meeting-assistant-cpu-bundle.tar` و `images/meeting-assistant-ollama-bundle.tar`
 - `bin/MeetingAssistant.exe`
-- `compose/compose.gpu.yml` و `compose/compose.cpu.yml`
+- `compose/compose.yml` (الأساس) و `compose/compose.gpu.yml` (تجاوز الـ GPU)
 - `.env.bundle` و `install_from_usb.ps1` و `launch_host_client.ps1` و `accept_offline_bundle.ps1`
 - **`RUNBOOK.txt`** — دليل المشغّل (انسخه مع الحزمة)
 
-انسخ **المجلد بالكامل** إلى USB (يُنصح بسعة **64 GB+**).
+انسخ **المجلد بالكامل** إلى USB (يُنصح بسعة **80 GB+**).
 
 ### على الجهاز الهدف (بدون إنترنت)
 
-**المتطلبات:** Windows 10/11، Docker Desktop (وضع Hyper-V مقبول)، Ollama مثبتاً والنموذج مُسحوباً مسبقاً (مثل `gemma4:e4b128k`).
+**المتطلبات:** Windows 10/11 و **Docker Desktop فقط** (وضع Hyper-V مقبول؛ تسريع الـ GPU يتطلب خلفية WSL2 مع NVIDIA Container Toolkit). لا حاجة لتثبيت Ollama — فهو والنموذج مدمجان داخل الحزمة.
 
 1. انسخ الحزمة من USB إلى قرص محلي (مثلاً `C:\MeetingAssistantBundle`).
 2. اقرأ **`RUNBOOK.txt`** في مجلد الحزمة.
@@ -1127,14 +1134,14 @@ cd C:\MeetingAssistantBundle
 .\install_from_usb.ps1
 ```
 
-يقوم السكربت بـ `docker load`، ثم يحاول ملف **GPU**، ويفحص `http://127.0.0.1:18080/health`، وإن فشل (شائع على Hyper-V بدون تمرير GPU) ينتقل تلقائياً إلى ملف **CPU**.
+يقوم السكربت بتحميل كل الصور (`docker load`)، ثم يفحص توفّر الـ GPU عبر `docker run --gpus all ... nvidia-smi`. عند توفّره يشغّل ملف **GPU** (`compose.yml` + `compose.gpu.yml`) ويفحص صحّة Whisper (`:18080/health`) و Ollama (`:11434/api/tags`)، وإلا (أو عند فشل ملف GPU) ينتقل تلقائياً إلى ملف **CPU** (`compose.yml` فقط). لفرض الـ CPU: `.\install_from_usb.ps1 -ForceCpu`.
 
 4. تحقق من الحزمة:
 
 ```powershell
 .\accept_offline_bundle.ps1
-# اختياري: مع ملف صوت و Ollama
-.\accept_offline_bundle.ps1 -TestAudioPath .\sample.wav -CheckOllama
+# اختياري: مع ملف صوت
+.\accept_offline_bundle.ps1 -TestAudioPath .\sample.wav
 ```
 
 5. شغّل التطبيق:
@@ -1156,12 +1163,14 @@ cd C:\MeetingAssistantBundle
 
 ### Ollama
 
-التطبيق على Windows يتصل بـ Ollama مباشرة (ليس عبر `host.docker.internal`). الافتراضي في `.env.bundle`:
+في الحزمة بدون إنترنت يعمل Ollama **داخل حاوية Docker** على `http://127.0.0.1:11434` مع النموذج مدمجاً مسبقاً عند البناء. عند البناء تسحب الصورة النموذج الأساس `gemma4:e4b`، ثم تُشتق منه نسخة بسياق طويل `gemma4:e4b128k` (`num_ctx = 131072`، نحو 128 ألف توكن) عبر `ollama create` وملف Modelfile. التطبيق يستخدم النسخة المشتقة `gemma4:e4b128k`. الافتراضي في `.env.bundle`:
 
 ```env
 MEETING_ASSISTANT_OLLAMA_BASE_URL=http://127.0.0.1:11434
 MEETING_ASSISTANT_OLLAMA_MODEL=gemma4:e4b128k
 ```
+
+لتغيير النماذج أو طول السياق، أعِد البناء بـ `-OllamaBaseModel <tag>` و `-OllamaModel <tag>` و/أو `-OllamaNumCtx <tokens>` (يجب أن يكون النموذج الأساس قابلاً للسحب على جهاز البناء).
 
 ### مراجع إضافية
 

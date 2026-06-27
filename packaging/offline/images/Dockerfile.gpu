@@ -1,13 +1,16 @@
+# syntax=docker/dockerfile:1
 FROM nvidia/cuda:12.9.0-cudnn-runtime-ubuntu24.04
 
 # PyTorch is installed from https://download.pytorch.org/whl/cu129 (torch 2.8.x+cu129)
 # to match this CUDA 12.9 runtime base and WhisperX's torch~=2.8 constraint.
 # Ubuntu 24.04 ships python3.12 in the default archives (22.04 does not).
+#
+# Layer ordering is deliberate: dependencies and model preload run BEFORE the application
+# source is copied, so editing app code does not bust the (expensive) model-download layer.
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
     PYTHONPATH=/opt/meeting-assistant/src \
     MEETING_ASSISTANT_OFFLINE_BUNDLE=1 \
     MEETING_ASSISTANT_SPEAKER_DIARIZATION=0 \
@@ -31,21 +34,19 @@ RUN python3.12 -m venv /opt/venv
 
 ENV PATH="/opt/venv/bin:$PATH"
 
+# --- Dependencies (cached unless requirements change) ---
+# Install CUDA torch (cu129 index) FIRST so whisperx (requirements-container.txt) does not
+# resolve a different torch build from the default PyPI index.
 COPY packaging/offline/images/requirements-container.txt ./packaging/offline/images/requirements-container.txt
 COPY packaging/offline/images/requirements-gpu.txt ./packaging/offline/images/requirements-gpu.txt
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --default-timeout=1000 --no-cache-dir -r packaging/offline/images/requirements-container.txt && \
-    pip install --default-timeout=1000 --no-cache-dir -r packaging/offline/images/requirements-gpu.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --upgrade pip setuptools wheel && \
+    pip install --default-timeout=1000 -r packaging/offline/images/requirements-gpu.txt && \
+    pip install --default-timeout=1000 -r packaging/offline/images/requirements-container.txt
 
-COPY src ./src
-COPY main.py ./main.py
-COPY packaging ./packaging
-COPY packaging/offline/scripts/entrypoint.sh /usr/local/bin/meeting-assistant-entrypoint.sh
-
-RUN sed -i 's/\r$//' /usr/local/bin/meeting-assistant-entrypoint.sh && \
-    chmod +x /usr/local/bin/meeting-assistant-entrypoint.sh && \
-    mkdir -p /opt/meeting-assistant/models/whisper /opt/meeting-assistant/models/hf
-
+# --- Model preload (cached unless requirements / preload script / model args change) ---
+# Standalone script: does NOT import the app package, so app source edits keep this layer cached.
+COPY packaging/offline/scripts/preload_models.py ./packaging/offline/scripts/preload_models.py
 ARG PRELOAD_MODELS=1
 ARG WHISPER_MODEL=large-v3-turbo
 ARG WHISPER_ALIGN_LANGUAGE=ar
@@ -55,6 +56,17 @@ RUN if [ "$PRELOAD_MODELS" = "1" ]; then \
       HF_HUB_OFFLINE=0 TRANSFORMERS_OFFLINE=0 \
       python ./packaging/offline/scripts/preload_models.py ; \
     fi
+
+# --- Application source (cheap layer; models already baked above) ---
+COPY src ./src
+COPY main.py ./main.py
+COPY packaging/offline/services ./packaging/offline/services
+COPY packaging/offline/scripts ./packaging/offline/scripts
+
+RUN cp ./packaging/offline/scripts/entrypoint.sh /usr/local/bin/meeting-assistant-entrypoint.sh && \
+    sed -i 's/\r$//' /usr/local/bin/meeting-assistant-entrypoint.sh && \
+    chmod +x /usr/local/bin/meeting-assistant-entrypoint.sh && \
+    mkdir -p /opt/meeting-assistant/models/whisper /opt/meeting-assistant/models/hf
 
 RUN python -c "import sys; assert '/opt/venv' in sys.prefix, 'FATAL: Python is running outside the container venv!'"
 
