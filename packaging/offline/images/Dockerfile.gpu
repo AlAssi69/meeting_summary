@@ -5,56 +5,65 @@ FROM nvidia/cuda:12.9.0-cudnn-runtime-ubuntu24.04
 # to match this CUDA 12.9 runtime base and WhisperX's torch~=2.8 constraint.
 # Ubuntu 24.04 ships python3.12 in the default archives (22.04 does not).
 #
-# Layer ordering is deliberate: dependencies and model preload run BEFORE the application
-# source is copied, so editing app code does not bust the (expensive) model-download layer.
-
-ENV DEBIAN_FRONTEND=noninteractive \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/opt/meeting-assistant/src \
-    MEETING_ASSISTANT_OFFLINE_BUNDLE=1 \
-    MEETING_ASSISTANT_SPEAKER_DIARIZATION=0 \
-    MEETING_ASSISTANT_WHISPER_MODEL=large-v3-turbo \
-    MEETING_ASSISTANT_WHISPER_ALIGN_LANGUAGE=ar \
-    MEETING_ASSISTANT_WHISPER_DEVICE=cuda \
-    MEETING_ASSISTANT_WHISPER_CACHE=/opt/meeting-assistant/models/whisper \
-    HF_HOME=/opt/meeting-assistant/models/hf \
-    HF_HUB_OFFLINE=0 \
-    TRANSFORMERS_OFFLINE=0 \
-    WHISPER_API_PORT=18080
+# Layer ordering is tuned so that editing the Dockerfile or app code reuses cache as much as
+# possible. From most-stable (top) to most-volatile (bottom):
+#   apt -> venv -> stable infra ENV -> [huggingface_hub + BIG Whisper download]
+#   -> torch/whisperx install -> [small alignment download] -> app source -> runtime ENV.
+# Crucially, the expensive Whisper CT2 download depends ONLY on huggingface_hub + the preload
+# script + the model build-args, so changing torch/whisperx requirements, app code, or any
+# runtime ENV does NOT re-download the big model.
 
 WORKDIR /opt/meeting-assistant
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# System deps (rarely change). DEBIAN_FRONTEND is inline so it is not a cache-affecting ENV.
+RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     python3.12 python3.12-venv python3.12-dev \
     ffmpeg git curl ca-certificates libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN python3.12 -m venv /opt/venv
 
-ENV PATH="/opt/venv/bin:$PATH"
+# Stable "infrastructure" ENV only (venv path, byte-code/buffering, model cache locations).
+# Feature-flag ENV that you may want to tweak lives at the BOTTOM so edits don't bust models.
+ENV PATH="/opt/venv/bin:$PATH" \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    MEETING_ASSISTANT_WHISPER_CACHE=/opt/meeting-assistant/models/whisper \
+    HF_HOME=/opt/meeting-assistant/models/hf
 
-# --- Dependencies (cached unless requirements change) ---
-# Install CUDA torch (cu129 index) FIRST so whisperx (requirements-container.txt) does not
-# resolve a different torch build from the default PyPI index.
-COPY packaging/offline/images/requirements-container.txt ./packaging/offline/images/requirements-container.txt
-COPY packaging/offline/images/requirements-gpu.txt ./packaging/offline/images/requirements-gpu.txt
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --upgrade pip setuptools wheel && \
-    pip install --default-timeout=1000 -r packaging/offline/images/requirements-gpu.txt && \
-    pip install --default-timeout=1000 -r packaging/offline/images/requirements-container.txt
+    pip install --upgrade pip setuptools wheel
 
-# --- Model preload (cached unless requirements / preload script / model args change) ---
-# Standalone script: does NOT import the app package, so app source edits keep this layer cached.
+# --- Stage 1: BIG Whisper CT2 download (needs only huggingface_hub) ---
+# Keep this constraint aligned with requirements-container.txt (huggingface_hub).
 COPY packaging/offline/scripts/preload_models.py ./packaging/offline/scripts/preload_models.py
 ARG PRELOAD_MODELS=1
 ARG WHISPER_MODEL=large-v3-turbo
 ARG WHISPER_ALIGN_LANGUAGE=ar
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --default-timeout=1000 "huggingface_hub>=0.26.0,<2"
 RUN if [ "$PRELOAD_MODELS" = "1" ]; then \
       MEETING_ASSISTANT_WHISPER_MODEL="$WHISPER_MODEL" \
       MEETING_ASSISTANT_WHISPER_ALIGN_LANGUAGE="$WHISPER_ALIGN_LANGUAGE" \
       HF_HUB_OFFLINE=0 TRANSFORMERS_OFFLINE=0 \
-      python ./packaging/offline/scripts/preload_models.py ; \
+      python ./packaging/offline/scripts/preload_models.py --stage whisper ; \
+    fi
+
+# --- Heavy dependencies (CUDA torch + whisperx). Editing these does NOT touch the big model ---
+# Install CUDA torch (cu129 index) FIRST so whisperx does not resolve a different torch build.
+COPY packaging/offline/images/requirements-gpu.txt ./packaging/offline/images/requirements-gpu.txt
+COPY packaging/offline/images/requirements-container.txt ./packaging/offline/images/requirements-container.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --default-timeout=1000 -r packaging/offline/images/requirements-gpu.txt && \
+    pip install --default-timeout=1000 -r packaging/offline/images/requirements-container.txt
+
+# --- Stage 2: small alignment model (needs torch/whisperx) ---
+RUN if [ "$PRELOAD_MODELS" = "1" ]; then \
+      MEETING_ASSISTANT_WHISPER_MODEL="$WHISPER_MODEL" \
+      MEETING_ASSISTANT_WHISPER_ALIGN_LANGUAGE="$WHISPER_ALIGN_LANGUAGE" \
+      HF_HUB_OFFLINE=0 TRANSFORMERS_OFFLINE=0 \
+      python ./packaging/offline/scripts/preload_models.py --stage align ; \
     fi
 
 # --- Application source (cheap layer; models already baked above) ---
@@ -70,7 +79,15 @@ RUN cp ./packaging/offline/scripts/entrypoint.sh /usr/local/bin/meeting-assistan
 
 RUN python -c "import sys; assert '/opt/venv' in sys.prefix, 'FATAL: Python is running outside the container venv!'"
 
-ENV HF_HUB_OFFLINE=1 \
+# --- Runtime / feature-flag ENV (edit freely; these layers are trivial and cache-safe) ---
+ENV PYTHONPATH=/opt/meeting-assistant/src \
+    MEETING_ASSISTANT_OFFLINE_BUNDLE=1 \
+    MEETING_ASSISTANT_SPEAKER_DIARIZATION=0 \
+    MEETING_ASSISTANT_WHISPER_MODEL=large-v3-turbo \
+    MEETING_ASSISTANT_WHISPER_ALIGN_LANGUAGE=ar \
+    MEETING_ASSISTANT_WHISPER_DEVICE=cuda \
+    WHISPER_API_PORT=18080 \
+    HF_HUB_OFFLINE=1 \
     TRANSFORMERS_OFFLINE=1 \
     HF_HUB_DISABLE_TELEMETRY=1
 
