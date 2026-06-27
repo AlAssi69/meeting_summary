@@ -49,7 +49,7 @@ $bundleDir = (Resolve-Path $BundleDir).Path
 $envPath = Join-Path $bundleDir ".env.bundle"
 $failures = 0
 
-Write-Host "[accept] Offline bundle acceptance — $bundleDir"
+Write-Host "[accept] Offline bundle acceptance - $bundleDir"
 
 if (-not (Test-Path $envPath)) {
     Write-Fail ".env.bundle not found at $envPath"
@@ -81,7 +81,7 @@ try {
         $failures++
     }
 } catch {
-    Write-Fail "Whisper API health unreachable at $baseUrl/health — $_"
+    Write-Fail "Whisper API health unreachable at $baseUrl/health - $_"
     $failures++
 }
 
@@ -92,7 +92,7 @@ try {
     if ($status.model_ready -eq $true) {
         Write-Pass "Model ready (whisper_model=$($status.whisper_model), device=$($status.whisper_device))"
     } else {
-        Write-Fail "model_ready is false — baked weights may be missing or cache corrupt"
+        Write-Fail "model_ready is false - baked weights may be missing or cache corrupt"
         $failures++
     }
     if ($status.offline_bundle -eq $true) {
@@ -102,7 +102,7 @@ try {
         $failures++
     }
 } catch {
-    Write-Fail "Whisper API status unreachable at $baseUrl/v1/status — $_"
+    Write-Fail "Whisper API status unreachable at $baseUrl/v1/status - $_"
     $failures++
 }
 
@@ -119,7 +119,7 @@ if (Test-Path $profilePath) {
         Write-Host "[WARN] GPU profile active but runtime is on CPU (driver/reservation fallback inside container)." -ForegroundColor Yellow
     }
 } else {
-    Write-Fail ".active_profile not found — run install_from_usb.ps1 first"
+    Write-Fail ".active_profile not found - run install_from_usb.ps1 first"
     $failures++
 }
 
@@ -149,7 +149,7 @@ if (-not $containerName) {
         }
     }
 
-    $offlineProbe = @"
+    $offlineProbe = @'
 import os
 import sys
 sys.path.insert(0, '/opt/meeting-assistant/src')
@@ -164,9 +164,9 @@ try:
     print('HF_LOCAL_OK')
 except Exception as exc:
     print('HF_LOCAL_FAIL', type(exc).__name__, str(exc)[:120])
-"@
+'@
 
-    $probeOut = docker exec $containerName python3 -c $offlineProbe 2>&1
+    $probeOut = $offlineProbe | docker exec -i $containerName python3 - 2>&1
     $probeText = ($probeOut | Out-String).Trim()
     if ($probeText -match "CACHE_OK") {
         Write-Pass "Whisper CT2 cache complete (local_files_only)"
@@ -222,7 +222,7 @@ if ($TestAudioPath) {
             $failures++
         }
     } catch {
-        Write-Fail "Transcribe smoke test failed — $_"
+        Write-Fail "Transcribe smoke test failed - $_"
         $failures++
     }
 }
@@ -247,7 +247,7 @@ if ($CheckOllama) {
             }
         }
     } catch {
-        Write-Fail "Ollama probe failed at $ollamaUrl — $_"
+        Write-Fail "Ollama probe failed at $ollamaUrl - $_"
         $failures++
     }
 }

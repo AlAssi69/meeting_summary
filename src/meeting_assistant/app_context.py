@@ -8,7 +8,6 @@ from meeting_assistant.adapters.mock_summarization import MockSummarizationAdapt
 from meeting_assistant.adapters.mock_transcription import MockTranscriptionAdapter
 from meeting_assistant.adapters.ollama_adapter import OllamaSummarizationAdapter
 from meeting_assistant.adapters.sqlite_session_repository import SqliteSessionRepository
-from meeting_assistant.adapters.whisperx_adapter import WhisperXTranscriptionAdapter
 from meeting_assistant.adapters.whisperx_http_adapter import (
     RemoteWhisperStatusClient,
     WhisperHttpTranscriptionAdapter,
@@ -22,7 +21,6 @@ from meeting_assistant.services.hf_token import (
     resolve_speaker_diarization_enabled,
 )
 from meeting_assistant.services.transcription_audio_prep import build_transcription_audio_preparer
-from meeting_assistant.services.whisperx_engine import WhisperXEngine
 from meeting_assistant.ui.app_facade import AppFacade
 from meeting_assistant.ui.locale_controller import LocaleController
 from meeting_assistant.ui.model_status_controller import ModelStatusController
@@ -52,6 +50,8 @@ def build_app_facade(engine: QQmlApplicationEngine) -> AppFacade:
 
     speech_status: SpeechModelStatusSource
     if config.USE_MOCK_BACKEND:
+        from meeting_assistant.services.whisperx_engine import WhisperXEngine
+
         transcription: TranscriptionPort = MockTranscriptionAdapter()
         speech_engine = WhisperXEngine(
             token_resolver=_token_resolver,
@@ -67,6 +67,9 @@ def build_app_facade(engine: QQmlApplicationEngine) -> AppFacade:
         )
         speech_status = RemoteWhisperStatusClient(config.WHISPER_API_URL)
     else:
+        from meeting_assistant.adapters.whisperx_adapter import WhisperXTranscriptionAdapter
+        from meeting_assistant.services.whisperx_engine import WhisperXEngine
+
         speech_engine = WhisperXEngine(
             token_resolver=_token_resolver,
             diarization_resolver=_diarization_resolver,

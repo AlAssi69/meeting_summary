@@ -22,7 +22,6 @@ a = Analysis(
         "meeting_assistant.adapters.whisperx_http_adapter",
         "meeting_assistant.adapters.ollama_adapter",
         "meeting_assistant.adapters.sqlite_session_repository",
-        "meeting_assistant.adapters.whisperx_adapter",
         "meeting_assistant.i18n.ar_catalog",
     ],
     hookspath=[],

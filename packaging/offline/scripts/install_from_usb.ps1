@@ -40,15 +40,26 @@ function Test-WhisperHealth {
 
 function Stop-WhisperCompose {
     param([string]$ComposeFile)
-    if (Test-Path $ComposeFile) {
-        docker compose -f $ComposeFile down --remove-orphans 2>$null | Out-Null
+    if (-not (Test-Path $ComposeFile)) { return }
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        docker compose -f $ComposeFile down --remove-orphans 2>&1 | Out-Null
+    } finally {
+        $ErrorActionPreference = $prev
     }
+}
+
+function Test-DockerImage {
+    param([string]$ImageRef)
+    docker image inspect $ImageRef 2>$null | Out-Null
+    return $LASTEXITCODE -eq 0
 }
 
 $bundleDir = (Resolve-Path $BundleDir).Path
 $envPath = Join-Path $bundleDir ".env.bundle"
-$gpuTar = Join-Path $bundleDir "images\meeting-assistant-gpu-bundle.tar"
 $cpuTar = Join-Path $bundleDir "images\meeting-assistant-cpu-bundle.tar"
+$cpuImageRef = "meeting-assistant:cpu-bundle"
 $gpuCompose = Join-Path $bundleDir "compose\compose.gpu.yml"
 $cpuCompose = Join-Path $bundleDir "compose\compose.cpu.yml"
 
@@ -76,43 +87,36 @@ if ($envContent -notmatch "MEETING_ASSISTANT_OUTPUT_ROOT=") {
     Add-Content $envPath "MEETING_ASSISTANT_OUTPUT_ROOT=$($env:MEETING_ASSISTANT_OUTPUT_ROOT)"
 }
 
-Write-Host "[import] Loading container images..."
-if (Test-Path $gpuTar) { docker load -i $gpuTar }
-if (Test-Path $cpuTar) { docker load -i $cpuTar }
+Write-Host "[import] Loading CPU container image..."
+if (Test-Path $cpuTar) {
+    docker load -i $cpuTar
+} elseif (Test-DockerImage -ImageRef $cpuImageRef) {
+    Write-Host "[import] CPU bundle tar not found; using existing Docker image $cpuImageRef"
+} else {
+    throw @"
+CPU bundle not found at $cpuTar and Docker image $cpuImageRef is not loaded.
+Build the bundle first, for example:
+  .\packaging\offline\scripts\build_usb_bundle.ps1
+Or load the image on this machine:
+  docker load -i images\meeting-assistant-cpu-bundle.tar
+"@
+}
 
-$activeProfile = "cpu"
 $port = if ($env:WHISPER_API_PORT) { [int]$env:WHISPER_API_PORT } else { $WhisperApiPort }
 
 Stop-WhisperCompose -ComposeFile $gpuCompose
 Stop-WhisperCompose -ComposeFile $cpuCompose
 
-Write-Host "[import] Attempting GPU inference profile (may fail on Hyper-V without GPU passthrough)..."
-try {
-    docker compose --env-file $envPath -f $gpuCompose up -d
-    if (Test-WhisperHealth -Port $port -TimeoutSec $HealthTimeoutSec) {
-        $activeProfile = "gpu"
-        Write-Host "[import] GPU profile healthy on port $port"
-    } else {
-        Write-Host "[import] GPU profile did not become healthy; falling back to CPU..."
-        Stop-WhisperCompose -ComposeFile $gpuCompose
-    }
-} catch {
-    Write-Host "[import] GPU profile failed to start: $_"
-    Stop-WhisperCompose -ComposeFile $gpuCompose
+Write-Host "[import] Starting CPU inference profile..."
+docker compose --env-file $envPath -f $cpuCompose up -d
+if (-not (Test-WhisperHealth -Port $port -TimeoutSec $HealthTimeoutSec)) {
+    throw "CPU inference profile failed health check on http://127.0.0.1:$port/health"
 }
-
-if ($activeProfile -ne "gpu") {
-    Write-Host "[import] Starting CPU inference profile..."
-    docker compose --env-file $envPath -f $cpuCompose up -d
-    if (-not (Test-WhisperHealth -Port $port -TimeoutSec $HealthTimeoutSec)) {
-        throw "CPU inference profile failed health check on http://127.0.0.1:$port/health"
-    }
-    Write-Host "[import] CPU profile healthy on port $port"
-}
+Write-Host "[import] CPU profile healthy on port $port"
 
 $profilePath = Join-Path $bundleDir ".active_profile"
-Set-Content -Path $profilePath -Value $activeProfile -Encoding ASCII
-Write-Host "[import] Active inference profile: $activeProfile"
+Set-Content -Path $profilePath -Value "cpu" -Encoding ASCII
+Write-Host "[import] Active inference profile: cpu"
 Write-Host "[import] SQLite data dir: $($env:MEETING_ASSISTANT_DATA_DIR)"
 Write-Host "[import] Meeting outputs: $($env:MEETING_ASSISTANT_OUTPUT_ROOT)"
 Write-Host "[import] Run launch_host_client.ps1 to open the desktop app."

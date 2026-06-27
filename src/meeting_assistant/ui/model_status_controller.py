@@ -4,13 +4,13 @@ import logging
 
 from PySide6.QtCore import Property, QObject, QTimer, Signal, Slot
 
+from typing import TYPE_CHECKING
+
 from meeting_assistant import config
 from meeting_assistant.ports.speech_model_status import SpeechModelStatusSource
-from meeting_assistant.services.whisper_cache_integrity import (
-    clear_whisper_hub_repo_cache,
-    whisper_cache_ui_case,
-)
-from meeting_assistant.workers.model_download_worker import ModelDownloadWorker
+
+if TYPE_CHECKING:
+    from meeting_assistant.workers.model_download_worker import ModelDownloadWorker
 
 _log = logging.getLogger(__name__)
 
@@ -110,6 +110,8 @@ class ModelStatusController(QObject):
         elif self._model_ready:
             pass
         else:
+            from meeting_assistant.services.whisper_cache_integrity import whisper_cache_ui_case
+
             case = whisper_cache_ui_case()
             if case == "missing":
                 parts.append(
@@ -303,6 +305,8 @@ class ModelStatusController(QObject):
         self._desc = ""
         self._emit_progress_props()
         self._set_downloading(True)
+        from meeting_assistant.workers.model_download_worker import ModelDownloadWorker
+
         w = ModelDownloadWorker(self)
         self._worker = w
         w.progress.connect(self._on_progress)
@@ -316,6 +320,8 @@ class ModelStatusController(QObject):
         if config.USE_MOCK_BACKEND or self.offlineBundle or self._downloading:
             return
         try:
+            from meeting_assistant.services.whisper_cache_integrity import clear_whisper_hub_repo_cache
+
             clear_whisper_hub_repo_cache()
         except OSError as e:
             _log.exception("Failed to clear Whisper cache")

@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
-from faster_whisper.transcribe import get_compression_ratio
+import zlib
+
+
+def _compression_ratio(text: str) -> float:
+    """Same ratio faster-whisper uses to detect repetitive hallucinations."""
+    text_bytes = text.encode("utf-8")
+    return len(text_bytes) / len(zlib.compress(text_bytes))
 
 
 def filter_whisperx_asr_segments(
@@ -30,7 +36,7 @@ def filter_whisperx_asr_segments(
             if ap is not None and ap < min_avg_logprob:
                 continue
         if len(text) >= compression_min_chars:
-            if get_compression_ratio(text) > compression_ratio_threshold:
+            if _compression_ratio(text) > compression_ratio_threshold:
                 continue
         out.append(seg)
     return out
