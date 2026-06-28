@@ -8,6 +8,18 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Resolve the real Docker executable. Calling the bare word "docker" can fail on
+# some machines (e.g. broken PATHEXT) where PowerShell resolves the extension-less
+# "...\resources\bin\docker" file and refuses to run it in the middle of a pipeline.
+$dockerCmd = Get-Command docker.exe -ErrorAction SilentlyContinue
+if (-not $dockerCmd) {
+    $dockerCmd = Get-Command docker -ErrorAction SilentlyContinue
+}
+if (-not $dockerCmd) {
+    throw "Docker CLI not found on PATH. Install Docker Desktop and re-run."
+}
+$docker = $dockerCmd.Source
+
 function Write-Pass([string]$Message) {
     Write-Host "[PASS] $Message" -ForegroundColor Green
 }
@@ -32,7 +44,7 @@ function Import-DotEnvFile {
 
 function Get-ActiveContainerName {
     param([string]$Root)
-    $name = docker ps --filter "name=meeting-assistant-whisper" --format "{{.Names}}" 2>$null
+    $name = & $docker ps --filter "name=meeting-assistant-whisper" --format "{{.Names}}" 2>$null
     if ($name) { return ($name | Select-Object -First 1).Trim() }
     return ""
 }
@@ -123,7 +135,7 @@ if (-not $containerName) {
 } else {
     Write-Pass "Inference container running: $containerName"
 
-    $inspect = docker inspect $containerName --format "{{json .Config.Env}}" | ConvertFrom-Json
+    $inspect = & $docker inspect $containerName --format "{{json .Config.Env}}" | ConvertFrom-Json
     $envMap = @{}
     foreach ($entry in $inspect) {
         $eq = $entry.IndexOf("=")
@@ -158,7 +170,7 @@ except Exception as exc:
     print('HF_LOCAL_FAIL', type(exc).__name__, str(exc)[:120])
 '@
 
-    $probeOut = $offlineProbe | docker exec -i $containerName python3 - 2>&1
+    $probeOut = $offlineProbe | & $docker exec -i $containerName python3 - 2>&1
     $probeText = ($probeOut | Out-String).Trim()
     if ($probeText -match "CACHE_OK") {
         Write-Pass "Whisper CT2 cache complete (local_files_only)"
@@ -176,7 +188,7 @@ except Exception as exc:
     }
 
     # Outbound Hugging Face connectivity should fail on air-gapped hosts.
-    $curlProbe = docker exec $containerName curl -fsS -m 5 https://huggingface.co 2>&1
+    $curlProbe = & $docker exec $containerName curl -fsS -m 5 https://huggingface.co 2>&1
     if ($LASTEXITCODE -ne 0) {
         Write-Pass "Outbound HTTPS to huggingface.co blocked or unreachable (offline-safe)"
     } else {
@@ -220,7 +232,7 @@ if ($TestAudioPath) {
 }
 
 # --- 7. Containerized Ollama (baked model) ---
-$ollamaContainer = docker ps --filter "name=meeting-assistant-ollama" --format "{{.Names}}" 2>$null
+$ollamaContainer = & $docker ps --filter "name=meeting-assistant-ollama" --format "{{.Names}}" 2>$null
 if ($ollamaContainer) {
     Write-Pass "Ollama container running: $(($ollamaContainer | Select-Object -First 1).Trim())"
 } else {

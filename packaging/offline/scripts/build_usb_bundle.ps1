@@ -16,6 +16,18 @@ $ErrorActionPreference = "Stop"
 # BuildKit is required for the cache mounts and # syntax= directives in the Dockerfiles.
 $env:DOCKER_BUILDKIT = "1"
 
+# Resolve the real Docker executable. Calling the bare word "docker" can fail on
+# some machines (e.g. broken PATHEXT) where PowerShell resolves the extension-less
+# "...\resources\bin\docker" file and refuses to run it in the middle of a pipeline.
+$dockerCmd = Get-Command docker.exe -ErrorAction SilentlyContinue
+if (-not $dockerCmd) {
+    $dockerCmd = Get-Command docker -ErrorAction SilentlyContinue
+}
+if (-not $dockerCmd) {
+    throw "Docker CLI not found on PATH. Install Docker Desktop and re-run."
+}
+$docker = $dockerCmd.Source
+
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path
 Set-Location $RepoRoot
 
@@ -51,7 +63,7 @@ function Format-Bytes {
 
 function Get-DockerImageBytes {
     param([string]$ImageRef)
-    $raw = docker image inspect $ImageRef --format "{{.Size}}" 2>$null
+    $raw = & $docker image inspect $ImageRef --format "{{.Size}}" 2>$null
     if ($LASTEXITCODE -ne 0 -or -not $raw) { return $null }
     return [long]$raw
 }
@@ -97,7 +109,7 @@ function Invoke-DockerBuild {
         "-f", $Dockerfile
     ) + $BuildArgs + @("-t", $Tag, ".")
 
-    & docker @dockerArgs
+    & $docker @dockerArgs
     if ($LASTEXITCODE -ne 0) {
         throw "Docker build failed for $Label (exit $LASTEXITCODE)"
     }
@@ -120,7 +132,7 @@ function Invoke-DockerSave {
     )
     $started = Get-Date
     Write-Info "Saving $Label to $(Split-Path $TarPath -Leaf)"
-    docker save -o $TarPath $ImageRef
+    & $docker save -o $TarPath $ImageRef
     if ($LASTEXITCODE -ne 0) {
         throw "docker save failed for $Label (exit $LASTEXITCODE)"
     }
@@ -147,7 +159,7 @@ Write-Host ""
 # --- Pre-flight ---
 Write-Step "Pre-flight checks"
 try {
-    $dockerVersion = docker version --format "{{.Server.Version}}" 2>$null
+    $dockerVersion = & $docker version --format "{{.Server.Version}}" 2>$null
     if (-not $dockerVersion) { throw "docker version returned no server version" }
     Write-Ok "Docker server: $dockerVersion (BuildKit enabled)"
 } catch {
@@ -225,6 +237,7 @@ Copy-Item (Join-Path $RepoRoot "packaging\offline\compose\compose.gpu.yml") (Joi
 Copy-Item (Join-Path $RepoRoot "packaging\offline\scripts\install_from_usb.ps1") (Join-Path $OutputDir "install_from_usb.ps1") -Force
 Copy-Item (Join-Path $RepoRoot "packaging\offline\scripts\launch_host_client.ps1") (Join-Path $OutputDir "launch_host_client.ps1") -Force
 Copy-Item (Join-Path $RepoRoot "packaging\offline\scripts\accept_offline_bundle.ps1") (Join-Path $OutputDir "accept_offline_bundle.ps1") -Force
+Copy-Item (Join-Path $RepoRoot "packaging\offline\scripts\clean_install.ps1") (Join-Path $OutputDir "clean_install.ps1") -Force
 Copy-Item (Join-Path $RepoRoot "packaging\offline\README.md") (Join-Path $OutputDir "RUNBOOK.txt") -Force
 Write-Ok "Operator scripts and compose files copied"
 
