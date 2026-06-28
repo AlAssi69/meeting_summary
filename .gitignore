@@ -42,3 +42,4 @@ __pypackages__/
 models/whisper/
 
 *.exe
+*.tar
