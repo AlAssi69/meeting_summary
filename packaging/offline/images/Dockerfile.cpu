@@ -38,12 +38,15 @@ COPY packaging/offline/scripts/preload_models.py ./packaging/offline/scripts/pre
 ARG PRELOAD_MODELS=1
 ARG WHISPER_MODEL=large-v3-turbo
 ARG WHISPER_ALIGN_LANGUAGE=ar
+ARG HF_TOKEN=
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --default-timeout=1000 "huggingface_hub>=0.26.0,<2"
+    pip install --default-timeout=1000 "huggingface_hub>=0.26.0,<2" hf_transfer
 RUN if [ "$PRELOAD_MODELS" = "1" ]; then \
       MEETING_ASSISTANT_WHISPER_MODEL="$WHISPER_MODEL" \
       MEETING_ASSISTANT_WHISPER_ALIGN_LANGUAGE="$WHISPER_ALIGN_LANGUAGE" \
       HF_HUB_OFFLINE=0 TRANSFORMERS_OFFLINE=0 \
+      HF_HUB_ENABLE_HF_TRANSFER=1 \
+      HF_TOKEN="$HF_TOKEN" \
       python ./packaging/offline/scripts/preload_models.py --stage whisper ; \
     fi
 

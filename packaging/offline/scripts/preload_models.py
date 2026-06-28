@@ -10,6 +10,8 @@ driven purely by environment variables / build-args:
   WhisperX forced-alignment model to seed into the HF cache.
 - ``MEETING_ASSISTANT_WHISPER_CACHE``: CT2 Whisper download root (faster-whisper layout).
 - ``HF_HOME``: Hugging Face cache root for alignment / tokenizer assets.
+- ``HF_TOKEN`` / ``HF_ACCESS_TOKEN`` / ``HUGGING_FACE_HUB_TOKEN``: optional Hub token for
+  faster downloads and higher rate limits during the **build** (not baked into runtime ENV).
 
 The CT2 ``allow_patterns`` here MUST stay aligned with
 ``src/meeting_assistant/services/whisper_hub_download.py`` and ``faster_whisper.utils.download_model``.
@@ -18,10 +20,16 @@ The CT2 ``allow_patterns`` here MUST stay aligned with
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import os
+import time
+from collections.abc import Callable
 from pathlib import Path
+from typing import TypeVar
 
-from huggingface_hub import snapshot_download
+from huggingface_hub import HfApi, hf_hub_download, snapshot_download
+
+T = TypeVar("T")
 
 # Mirror of meeting_assistant.config.FASTER_WHISPER_HF_REPOS. Kept here (duplicated on
 # purpose) so this preload layer does not depend on the application source tree.
@@ -55,6 +63,26 @@ _CT2_ALLOW_PATTERNS: list[str] = [
     "tokenizer.json",
     "vocabulary.*",
 ]
+
+# Typical model.bin sizes (bytes) for user-facing progress hints.
+_MODEL_BIN_HINT_BYTES: dict[str, int] = {
+    "large-v3-turbo": 1_400_000_000,
+    "turbo": 1_400_000_000,
+    "large-v3": 2_600_000_000,
+    "large": 2_600_000_000,
+}
+
+
+def _log(msg: str) -> None:
+    print(msg, flush=True)
+
+
+def _hf_token() -> str | None:
+    for key in ("HF_TOKEN", "HF_ACCESS_TOKEN", "HUGGING_FACE_HUB_TOKEN", "MEETING_ASSISTANT_HF_TOKEN"):
+        value = (os.environ.get(key) or "").strip()
+        if value:
+            return value
+    return None
 
 
 def _whisper_model_size() -> str:
@@ -91,16 +119,65 @@ def _align_language() -> str:
     return (os.environ.get("MEETING_ASSISTANT_WHISPER_ALIGN_LANGUAGE") or "ar").strip().lower()
 
 
+def _retry(
+    label: str,
+    fn: Callable[[], T],
+    *,
+    attempts: int = 3,
+    base_delay_sec: float = 5.0,
+) -> T:
+    last_exc: BaseException | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            return fn()
+        except Exception as exc:
+            last_exc = exc
+            if attempt >= attempts:
+                break
+            delay = base_delay_sec * attempt
+            _log(f"[preload] {label} failed (attempt {attempt}/{attempts}): {exc}")
+            _log(f"[preload] Retrying in {delay:.0f}s...")
+            time.sleep(delay)
+    assert last_exc is not None
+    raise last_exc
+
+
+def _match_repo_files(repo_id: str, patterns: list[str], token: str | None) -> list[str]:
+    api = HfApi(token=token)
+    all_files = api.list_repo_files(repo_id, repo_type="model")
+    matched: list[str] = []
+    for pattern in patterns:
+        matched.extend(f for f in all_files if fnmatch.fnmatch(f, pattern))
+    # Small files first; model.bin last (largest, slowest).
+    unique = sorted(set(matched), key=lambda name: (name == "model.bin", name))
+    if not unique:
+        raise RuntimeError(f"No files matched {patterns!r} in repo {repo_id}")
+    return unique
+
+
+def _format_size_hint(num_bytes: int | None) -> str:
+    if num_bytes is None or num_bytes <= 0:
+        return "unknown size"
+    if num_bytes >= 1_000_000_000:
+        return f"~{num_bytes / 1_000_000_000:.1f} GB"
+    if num_bytes >= 1_000_000:
+        return f"~{num_bytes / 1_000_000:.0f} MB"
+    return f"~{num_bytes / 1_000:.0f} KB"
+
+
 def init_hf_cache() -> None:
     hf_home = _hf_cache_dir()
     hf_home.mkdir(parents=True, exist_ok=True)
+    token = _hf_token()
+    _log(f"[preload] Initializing HF cache at {hf_home}...")
     snapshot_download(
         repo_id="hf-internal-testing/tiny-random-bert",
         allow_patterns=["config.json"],
         local_files_only=False,
         cache_dir=str(hf_home),
+        token=token,
     )
-    print(f"[preload] HF cache initialized: {hf_home}")
+    _log(f"[preload] HF cache ready: {hf_home}")
 
 
 def seed_whisper_ct2() -> None:
@@ -108,38 +185,82 @@ def seed_whisper_ct2() -> None:
     repo = _whisper_hf_repo_id(model_size)
     target = _whisper_cache_dir()
     target.mkdir(parents=True, exist_ok=True)
-    print(f"[preload] Whisper CT2 model={model_size} repo={repo}")
-    path = snapshot_download(
-        repo,
-        repo_type="model",
-        cache_dir=str(target),
-        local_files_only=False,
-        allow_patterns=_CT2_ALLOW_PATTERNS,
-    )
-    print(f"[preload] Whisper cache ready: {path}")
+    token = _hf_token()
+
+    if token:
+        _log("[preload] HF token present (authenticated Hub download).")
+    else:
+        _log(
+            "[preload] No HF token set. Downloads work but may be slower or stall under "
+            "rate limits. Set HF_TOKEN in the environment before docker build."
+        )
+
+    transfer = (os.environ.get("HF_HUB_ENABLE_HF_TRANSFER") or "").strip().lower()
+    if transfer in ("1", "true", "yes", "on"):
+        _log("[preload] HF transfer acceleration enabled (hf_transfer).")
+
+    files = _match_repo_files(repo, _CT2_ALLOW_PATTERNS, token)
+    _log(f"[preload] Whisper CT2 model={model_size} repo={repo}")
+    _log(f"[preload] Files to download ({len(files)}): {', '.join(files)}")
+
+    api = HfApi(token=token)
+    last_path = ""
+    for index, filename in enumerate(files, start=1):
+        size_hint = ""
+        if filename == "model.bin":
+            size_hint = _format_size_hint(_MODEL_BIN_HINT_BYTES.get(model_size, 1_400_000_000))
+            _log(
+                f"[preload] ({index}/{len(files)}) Downloading {filename} ({size_hint}) — "
+                "this is the slow step; network may look idle between progress updates."
+            )
+        else:
+            try:
+                info = api.get_paths_info(repo, [filename], repo_type="model")[0]
+                size_hint = _format_size_hint(getattr(info, "size", None))
+            except Exception:
+                size_hint = "unknown size"
+            _log(f"[preload] ({index}/{len(files)}) Downloading {filename} ({size_hint})...")
+
+        t0 = time.perf_counter()
+
+        def _download_one(name: str = filename) -> str:
+            return hf_hub_download(
+                repo_id=repo,
+                filename=name,
+                repo_type="model",
+                cache_dir=str(target),
+                local_files_only=False,
+                token=token,
+                resume_download=True,
+            )
+
+        last_path = _retry(f"download {filename}", _download_one)
+        elapsed = time.perf_counter() - t0
+        _log(f"[preload]   done {filename} in {elapsed:.1f}s -> {last_path}")
+
+    _log(f"[preload] Whisper cache ready: {last_path}")
 
 
 def seed_alignment_model() -> None:
     lang = _align_language()
-    print(f"[preload] Alignment language: {lang}")
+    _log(f"[preload] Downloading alignment model for language={lang}...")
     import whisperx
 
     model_a, metadata = whisperx.load_align_model(language_code=lang, device="cpu")
     _ = (model_a, metadata)
-    print(f"[preload] Alignment artifacts in HF cache: {_hf_cache_dir()}")
+    _log(f"[preload] Alignment artifacts in HF cache: {_hf_cache_dir()}")
 
 
 def _run_stage(stage: str) -> None:
-    # Stages exist so the Dockerfile can download the large Whisper CT2 model in a layer that
-    # depends ONLY on huggingface_hub (cheap to install) — the heavy torch/whisperx install
-    # happens between the "whisper" and "align" stages. Editing torch/whisperx requirements
-    # therefore does NOT re-download the big Whisper model.
+    t0 = time.perf_counter()
+    _log(f"[preload] Stage start: {stage}")
     if stage in ("all", "whisper"):
         init_hf_cache()
         seed_whisper_ct2()
     if stage in ("all", "align"):
         seed_alignment_model()
-    print(f"[preload] Done (stage={stage}).")
+    elapsed = time.perf_counter() - t0
+    _log(f"[preload] Stage done: {stage} ({elapsed:.1f}s)")
 
 
 if __name__ == "__main__":

@@ -56,6 +56,25 @@ function Get-DockerImageBytes {
     return [long]$raw
 }
 
+function Get-WhisperDockerBuildArgs {
+    $args = @(
+        "--build-arg", "PRELOAD_MODELS=1",
+        "--build-arg", "WHISPER_MODEL=$WhisperModel",
+        "--build-arg", "WHISPER_ALIGN_LANGUAGE=$WhisperAlignLanguage"
+    )
+    $token = $env:HF_TOKEN
+    if (-not $token) { $token = $env:HF_ACCESS_TOKEN }
+    if (-not $token) { $token = $env:HUGGING_FACE_HUB_TOKEN }
+    if ($token) {
+        Write-Info "HF token found in environment (authenticated Whisper preload)."
+        $args += @("--build-arg", "HF_TOKEN=$token")
+    } else {
+        Write-Warning "No HF_TOKEN in environment. Whisper download may be slow or stall on Hub rate limits."
+        Write-Warning "Set HF_TOKEN before building: `$env:HF_TOKEN = 'hf_...'"
+    }
+    return $args
+}
+
 function Invoke-DockerBuild {
     param(
         [string]$Label,
@@ -172,21 +191,13 @@ Write-Ok "Bundle tree ready under $(Resolve-Path $OutputDir)"
 Write-Step "Build GPU Whisper inference image (models baked in)"
 Invoke-DockerBuild -Label "GPU Whisper inference" `
     -Dockerfile "packaging/offline/images/Dockerfile.gpu" `
-    -BuildArgs @(
-        "--build-arg", "PRELOAD_MODELS=1",
-        "--build-arg", "WHISPER_MODEL=$WhisperModel",
-        "--build-arg", "WHISPER_ALIGN_LANGUAGE=$WhisperAlignLanguage"
-    ) `
+    -BuildArgs (Get-WhisperDockerBuildArgs) `
     -Tag $GpuImageTag
 
 Write-Step "Build CPU Whisper inference image (models baked in)"
 Invoke-DockerBuild -Label "CPU Whisper inference" `
     -Dockerfile "packaging/offline/images/Dockerfile.cpu" `
-    -BuildArgs @(
-        "--build-arg", "PRELOAD_MODELS=1",
-        "--build-arg", "WHISPER_MODEL=$WhisperModel",
-        "--build-arg", "WHISPER_ALIGN_LANGUAGE=$WhisperAlignLanguage"
-    ) `
+    -BuildArgs (Get-WhisperDockerBuildArgs) `
     -Tag $CpuImageTag
 
 Write-Step "Build Ollama image (base then derived model)"
