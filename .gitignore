@@ -50,6 +50,9 @@ __pypackages__/
 # Portable Whisper weights (keep models/.gitkeep; ignore hub cache contents)
 models/whisper/
 
+# NLTK corpora/tokenizers (e.g. punkt_tab from docs/TROUBLESHOOTING_NLTK_PUNKT_TAB.md Option B)
+nltk_data/
+
 # Large binaries / Docker exports (never commit)
 *.exe
 *.tar

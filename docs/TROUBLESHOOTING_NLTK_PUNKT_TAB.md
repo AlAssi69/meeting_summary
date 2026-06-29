@@ -117,6 +117,18 @@ Fetch the data on an internet-connected machine, carry it over (USB), and inject
 
 **On a machine WITH internet + Python:**
 
+NLTK is **not** available on the system `python` by default. Use one of these before downloading:
+
+```powershell
+# A) This repository — activate the venv (whisperx pulls nltk via requirements.txt):
+.\.venv\Scripts\Activate.ps1
+
+# B) Any machine — install NLTK into the Python you will run:
+python -m pip install nltk
+```
+
+Then download the tokenizers into a folder next to your current directory:
+
 ```powershell
 python -c "import nltk; nltk.download('punkt_tab', download_dir='nltk_data'); nltk.download('punkt', download_dir='nltk_data')"
 ```
