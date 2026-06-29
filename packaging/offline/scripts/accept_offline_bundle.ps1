@@ -28,6 +28,25 @@ function Write-Fail([string]$Message) {
     Write-Host "[FAIL] $Message" -ForegroundColor Red
 }
 
+function Invoke-NativeCommand {
+    <#
+    Run a native executable without letting stderr become a terminating error when
+    $ErrorActionPreference is Stop (common with docker/curl 2>&1 merges).
+    #>
+    param([scriptblock]$Command)
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $output = & $Command 2>&1
+        return @{
+            Output   = $output
+            ExitCode = $LASTEXITCODE
+        }
+    } finally {
+        $ErrorActionPreference = $prevEap
+    }
+}
+
 function Import-DotEnvFile {
     param([string]$Path)
     if (-not (Test-Path $Path)) { return }
@@ -170,8 +189,8 @@ except Exception as exc:
     print('HF_LOCAL_FAIL', type(exc).__name__, str(exc)[:120])
 '@
 
-    $probeOut = $offlineProbe | & $docker exec -i $containerName python3 - 2>&1
-    $probeText = ($probeOut | Out-String).Trim()
+    $probeResult = Invoke-NativeCommand { $offlineProbe | & $docker exec -i $containerName python3 - }
+    $probeText = ($probeResult.Output | Out-String).Trim()
     if ($probeText -match "CACHE_OK") {
         Write-Pass "Whisper CT2 cache complete (local_files_only)"
     } else {
@@ -188,8 +207,8 @@ except Exception as exc:
     }
 
     # Outbound Hugging Face connectivity should fail on air-gapped hosts.
-    $curlProbe = & $docker exec $containerName curl -fsS -m 5 https://huggingface.co 2>&1
-    if ($LASTEXITCODE -ne 0) {
+    $curlResult = Invoke-NativeCommand { & $docker exec $containerName curl -fsS -m 5 https://huggingface.co }
+    if ($curlResult.ExitCode -ne 0) {
         Write-Pass "Outbound HTTPS to huggingface.co blocked or unreachable (offline-safe)"
     } else {
         Write-Host "[WARN] huggingface.co is reachable from the container (online build machine?). Verify air-gap on target." -ForegroundColor Yellow
@@ -214,15 +233,15 @@ if ($TestAudioPath) {
     Write-Host "[accept] Transcribe smoke test with $audio"
     try {
         $transcribeUrl = "$baseUrl/v1/transcribe"
-        $curlOut = curl.exe -sS -m 600 -X POST -F "audio=@$audio" $transcribeUrl 2>&1
-        if ($LASTEXITCODE -ne 0) {
-            throw "curl exited $LASTEXITCODE : $curlOut"
+        $curlResult = Invoke-NativeCommand { curl.exe -sS -m 600 -X POST -F "audio=@$audio" $transcribeUrl }
+        if ($curlResult.ExitCode -ne 0) {
+            throw "curl exited $($curlResult.ExitCode) : $($curlResult.Output)"
         }
-        $response = $curlOut | ConvertFrom-Json
+        $response = $curlResult.Output | ConvertFrom-Json
         if ($response.text -and ($response.text.ToString().Length -gt 0)) {
             Write-Pass "Transcribe returned $($response.text.ToString().Length) characters"
         } else {
-            Write-Fail "Transcribe returned empty text: $curlOut"
+            Write-Fail "Transcribe returned empty text: $($curlResult.Output)"
             $failures++
         }
     } catch {

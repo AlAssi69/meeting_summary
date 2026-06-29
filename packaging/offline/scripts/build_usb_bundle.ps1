@@ -237,6 +237,14 @@ Copy-Item (Join-Path $RepoRoot "packaging\offline\compose\compose.gpu.yml") (Joi
 Copy-Item (Join-Path $RepoRoot "packaging\offline\scripts\install_from_usb.ps1") (Join-Path $OutputDir "install_from_usb.ps1") -Force
 Copy-Item (Join-Path $RepoRoot "packaging\offline\scripts\launch_host_client.ps1") (Join-Path $OutputDir "launch_host_client.ps1") -Force
 Copy-Item (Join-Path $RepoRoot "packaging\offline\scripts\accept_offline_bundle.ps1") (Join-Path $OutputDir "accept_offline_bundle.ps1") -Force
+$acceptScriptPath = Join-Path $OutputDir "accept_offline_bundle.ps1"
+$acceptScriptText = Get-Content -Path $acceptScriptPath -Raw
+if ($acceptScriptText -notmatch "function Invoke-NativeCommand") {
+    throw "accept_offline_bundle.ps1 is missing Invoke-NativeCommand (offline curl probe would abort on stderr)."
+}
+if ($acceptScriptText -notmatch "Invoke-NativeCommand.*huggingface\.co") {
+    throw "accept_offline_bundle.ps1 must probe huggingface.co via Invoke-NativeCommand."
+}
 Copy-Item (Join-Path $RepoRoot "packaging\offline\scripts\clean_install.ps1") (Join-Path $OutputDir "clean_install.ps1") -Force
 Copy-Item (Join-Path $RepoRoot "packaging\offline\README.md") (Join-Path $OutputDir "RUNBOOK.txt") -Force
 Write-Ok "Operator scripts and compose files copied"
