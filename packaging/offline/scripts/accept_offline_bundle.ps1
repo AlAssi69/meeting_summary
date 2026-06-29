@@ -232,8 +232,17 @@ if ($TestAudioPath) {
     $audio = (Resolve-Path $TestAudioPath).Path
     Write-Host "[accept] Transcribe smoke test with $audio"
     try {
+        # Use curl.exe explicitly. In PowerShell the bare word "curl" is an alias for
+        # Invoke-WebRequest, which cannot perform curl-style multipart uploads (-F) and
+        # rejects flags like -X, so it must never be used for this POST. Resolve the real
+        # executable (ships with Windows 10 1803+/Windows 11) and fail clearly if absent.
+        $curlCmd = Get-Command curl.exe -ErrorAction SilentlyContinue
+        if (-not $curlCmd) {
+            throw "curl.exe not found on PATH (ships with Windows 10 1803+/Windows 11). Install it or add it to PATH, then re-run."
+        }
+        $curl = $curlCmd.Source
         $transcribeUrl = "$baseUrl/v1/transcribe"
-        $curlResult = Invoke-NativeCommand { curl.exe -sS -m 600 -X POST -F "audio=@$audio" $transcribeUrl }
+        $curlResult = Invoke-NativeCommand { & $curl -sS -m 600 -X POST -F "audio=@$audio" $transcribeUrl }
         if ($curlResult.ExitCode -ne 0) {
             throw "curl exited $($curlResult.ExitCode) : $($curlResult.Output)"
         }
