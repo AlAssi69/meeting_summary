@@ -241,6 +241,35 @@ def seed_whisper_ct2() -> None:
     _log(f"[preload] Whisper cache ready: {last_path}")
 
 
+def _nltk_data_dir() -> Path:
+    raw = os.environ.get("NLTK_DATA")
+    if raw:
+        return Path(raw)
+    return Path("/opt/meeting-assistant/models/nltk")
+
+
+def seed_nltk_punkt() -> None:
+    """Bake the NLTK sentence tokenizers WhisperX alignment needs at runtime.
+
+    ``whisperx.align`` loads ``tokenizers/punkt_tab/<lang>.pickle`` via NLTK. This is
+    fetched lazily at align time, NOT by ``load_align_model``; without it the offline
+    container raises ``LookupError: Resource 'punkt_tab' not found`` and returns HTTP 500.
+    """
+    target = _nltk_data_dir()
+    target.mkdir(parents=True, exist_ok=True)
+    import nltk
+
+    for resource in ("punkt_tab", "punkt"):
+        _log(f"[preload] Downloading NLTK resource '{resource}' -> {target}...")
+        ok = _retry(
+            f"nltk.download {resource}",
+            lambda r=resource: nltk.download(r, download_dir=str(target), quiet=True),
+        )
+        if not ok:
+            raise RuntimeError(f"NLTK download failed for resource {resource!r}")
+    _log(f"[preload] NLTK tokenizers ready: {target}")
+
+
 def seed_alignment_model() -> None:
     lang = _align_language()
     _log(f"[preload] Downloading alignment model for language={lang}...")
@@ -249,6 +278,7 @@ def seed_alignment_model() -> None:
     model_a, metadata = whisperx.load_align_model(language_code=lang, device="cpu")
     _ = (model_a, metadata)
     _log(f"[preload] Alignment artifacts in HF cache: {_hf_cache_dir()}")
+    seed_nltk_punkt()
 
 
 def _run_stage(stage: str) -> None:

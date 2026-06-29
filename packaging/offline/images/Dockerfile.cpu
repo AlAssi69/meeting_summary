@@ -27,7 +27,8 @@ ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     MEETING_ASSISTANT_WHISPER_CACHE=/opt/meeting-assistant/models/whisper \
-    HF_HOME=/opt/meeting-assistant/models/hf
+    HF_HOME=/opt/meeting-assistant/models/hf \
+    NLTK_DATA=/opt/meeting-assistant/models/nltk
 
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --upgrade pip setuptools wheel
@@ -76,7 +77,7 @@ COPY packaging/offline/scripts ./packaging/offline/scripts
 RUN cp ./packaging/offline/scripts/entrypoint.sh /usr/local/bin/meeting-assistant-entrypoint.sh && \
     sed -i 's/\r$//' /usr/local/bin/meeting-assistant-entrypoint.sh && \
     chmod +x /usr/local/bin/meeting-assistant-entrypoint.sh && \
-    mkdir -p /opt/meeting-assistant/models/whisper /opt/meeting-assistant/models/hf
+    mkdir -p /opt/meeting-assistant/models/whisper /opt/meeting-assistant/models/hf /opt/meeting-assistant/models/nltk
 
 RUN python -c "import sys; assert '/opt/venv' in sys.prefix, 'FATAL: Python is running outside the container venv!'"
 
