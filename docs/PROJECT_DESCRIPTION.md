@@ -51,7 +51,8 @@ Give users a **single place** to: manage **sessions** (chat-style history), **re
 - **[packaging/offline/README.md](../packaging/offline/README.md)** — build scripts, compose files, operator runbook source (`RUNBOOK.txt` on USB).
 - **[SRS.md](SRS.md)** — product/architecture requirements aligned with implementation.
 - **[INSTALLATION_AR.md](INSTALLATION_AR.md)** — Arabic Windows installation and migration guide.
-- **[Feature SRS - Speaker Diarization and Alignment.md](Feature SRS - Speaker Diarization and Alignment.md)** — addendum for diarization/alignment (implementation status at top).
+- **[Feature SRS - Speaker Diarization and Alignment.md](Feature%20SRS%20-%20Speaker%20Diarization%20and%20Alignment.md)** — addendum for diarization/alignment (implementation status at top).
+- **[TROUBLESHOOTING_NLTK_PUNKT_TAB.md](TROUBLESHOOTING_NLTK_PUNKT_TAB.md)** — fixing the WhisperX `punkt_tab` (NLTK) alignment 500 error in the offline bundle.
 - **[CONTRIBUTING.md](../CONTRIBUTING.md)** — development setup, documentation sync rules, PR checklist.
 
 ## Likely consultation topics (context)

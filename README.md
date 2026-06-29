@@ -56,6 +56,7 @@ The UI is **Qt Quick (QML)** on **PySide6** 🐍; Python owns persistence, AI ad
 - 🤝 [CONTRIBUTING.md](CONTRIBUTING.md) — development setup, documentation sync rules, PR checklist.
 - 🧊 [docs/OFFLINE_DOCKER_HANDOFF.md](docs/OFFLINE_DOCKER_HANDOFF.md) — USB/offline Path A packaging and operator runbook.
 - 📦 [packaging/offline/README.md](packaging/offline/README.md) — build scripts, Dockerfiles, and USB bundle layout.
+- 🩹 [docs/TROUBLESHOOTING_NLTK_PUNKT_TAB.md](docs/TROUBLESHOOTING_NLTK_PUNKT_TAB.md) — fixing the WhisperX `punkt_tab` (NLTK) alignment 500 error in the offline bundle.
 
 ---
 
@@ -250,6 +251,8 @@ Most variables below are read in **`src/meeting_assistant/config.py`**. **`MEETI
 | Variable | Default | Meaning |
 |----------|---------|---------|
 | `MEETING_ASSISTANT_MOCK` | `0` | If true: mock STT/LLM and in-memory sessions. If false: SQLite + WhisperX + Ollama. |
+| `MEETING_ASSISTANT_OFFLINE_BUNDLE` | `0` | Offline USB bundle (Path A) mode: disables in-UI Hub downloads (models live in the inference container). Set `1` in the bundled `.env.bundle` (`OFFLINE_BUNDLE`). |
+| `MEETING_ASSISTANT_WHISPER_API_URL` | *(unset)* | Path A host client: base URL of the headless WhisperX HTTP service (e.g. `http://127.0.0.1:18080`). When set, the host client calls the container instead of loading local torch / whisperx (`WHISPER_API_URL`). No trailing slash. |
 | `MEETING_ASSISTANT_DEBUG` | `0` | Extra debug UI where implemented (`DEBUG_UI`). |
 | `MEETING_ASSISTANT_TRACE_LEVEL` | `0` | Terminal trace verbosity **0–3** (0 = default logging; 1 = main pipeline; 2 = sub-steps/I/O; 3 = fine-grained). If set, overrides `MEETING_ASSISTANT_VERBOSE`. |
 | `MEETING_ASSISTANT_VERBOSE` | *(unset)* | Alias for the same **0–3** scale as `TRACE_LEVEL` when `TRACE_LEVEL` is unset. |
@@ -539,6 +542,7 @@ meeting_summary/
 │   ├── PROJECT_DESCRIPTION.md
 │   ├── INSTALLATION_AR.md
 │   ├── OFFLINE_DOCKER_HANDOFF.md
+│   ├── TROUBLESHOOTING_NLTK_PUNKT_TAB.md
 │   └── Feature SRS - Speaker Diarization and Alignment.md
 ├── packaging/
 │   └── offline/                   # Path A USB bundle (Docker images + PyInstaller host client)

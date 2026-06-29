@@ -2,7 +2,7 @@
 
 Issues and pull requests are welcome.
 
-**Last documentation alignment audit:** 2026-06-23 (base commit `e2151ab` + doc alignment edits in the same pass).
+**Last documentation alignment audit:** 2026-06-29 (env reference gap fixes: added `MEETING_ASSISTANT_OFFLINE_BUNDLE` and `MEETING_ASSISTANT_WHISPER_API_URL` to README; indexed `docs/TROUBLESHOOTING_NLTK_PUNKT_TAB.md` across the doc set).
 
 ---
 
@@ -36,7 +36,7 @@ Code is the source of truth. When you change behavior, keep prose docs aligned.
 | DB schema or migrations | [`src/meeting_assistant/adapters/sqlite_session_repository.py`](src/meeting_assistant/adapters/sqlite_session_repository.py), SRS §2.4, [Feature SRS](docs/Feature%20SRS%20-%20Speaker%20Diarization%20and%20Alignment.md) if speaker-related |
 | Pipeline order or worker contracts | README *Current pipeline*, SRS §3.5, Feature SRS if diarization, [docs/PROJECT_DESCRIPTION.md](docs/PROJECT_DESCRIPTION.md) if the high-level story changes |
 | Install paths or launchers (`run.ps1`, `run.bat`) | README *Install* / *How to run*, [docs/INSTALLATION_AR.md](docs/INSTALLATION_AR.md) |
-| Offline USB bundle (`packaging/offline/`) | [packaging/offline/README.md](packaging/offline/README.md), [docs/OFFLINE_DOCKER_HANDOFF.md](docs/OFFLINE_DOCKER_HANDOFF.md), [docs/INSTALLATION_AR.md](docs/INSTALLATION_AR.md) § Path A, README § Offline USB bundle |
+| Offline USB bundle (`packaging/offline/`) | [packaging/offline/README.md](packaging/offline/README.md), [docs/OFFLINE_DOCKER_HANDOFF.md](docs/OFFLINE_DOCKER_HANDOFF.md), [docs/INSTALLATION_AR.md](docs/INSTALLATION_AR.md) § Path A, README § Offline USB bundle, [docs/TROUBLESHOOTING_NLTK_PUNKT_TAB.md](docs/TROUBLESHOOTING_NLTK_PUNKT_TAB.md) if NLTK/alignment seeding changes |
 | User-facing Arabic install steps | [docs/INSTALLATION_AR.md](docs/INSTALLATION_AR.md) |
 
 **Doc set in scope:**
@@ -48,6 +48,7 @@ Code is the source of truth. When you change behavior, keep prose docs aligned.
 - [docs/OFFLINE_DOCKER_HANDOFF.md](docs/OFFLINE_DOCKER_HANDOFF.md) — air-gapped USB bundle (Path A)
 - [packaging/offline/README.md](packaging/offline/README.md) — offline packaging implementation and scripts
 - [docs/Feature SRS - Speaker Diarization and Alignment.md](docs/Feature%20SRS%20-%20Speaker%20Diarization%20and%20Alignment.md) — diarization addendum
+- [docs/TROUBLESHOOTING_NLTK_PUNKT_TAB.md](docs/TROUBLESHOOTING_NLTK_PUNKT_TAB.md) — offline-bundle NLTK `punkt_tab` alignment fix
 - [`.env.example`](.env.example) — commented env template
 
 ---
