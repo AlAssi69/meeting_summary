@@ -15,7 +15,13 @@ $pip = Join-Path $VenvDir "Scripts\pip.exe"
 
 if (-not (Test-Path $python)) {
     Write-Host "[host-client] Creating venv at $VenvDir"
-    py -3.12 -m venv $VenvDir
+    # Resolve py.exe explicitly; the bare "py" can be shadowed or unresolved on locked-down PATHs.
+    $pyCmd = Get-Command py.exe -ErrorAction SilentlyContinue
+    if (-not $pyCmd) { $pyCmd = Get-Command py -ErrorAction SilentlyContinue }
+    if (-not $pyCmd) {
+        throw "Python launcher 'py.exe' not found on PATH. Install Python 3.12 (with the py launcher) and re-run."
+    }
+    & $pyCmd.Source -3.12 -m venv $VenvDir
 }
 
 Write-Host "[host-client] Installing host dependencies..."

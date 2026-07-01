@@ -141,6 +141,33 @@ function Invoke-DockerSave {
     Write-Ok "$Label tar saved in $($elapsed.ToString('mm\:ss')) ($(Format-Bytes $fileSize))"
 }
 
+function Assert-PunktBaked {
+    <#
+    Fail the build early if the NLTK sentence tokenizers were not baked into a Whisper
+    image. Missing punkt_tab is the exact cause of the offline whisperx.align() HTTP 500,
+    so we verify it here rather than discovering it on the air-gapped target.
+    #>
+    param(
+        [string]$Label,
+        [string]$ImageRef
+    )
+    Write-Info "Verifying NLTK punkt_tab is baked into $Label ($ImageRef)..."
+    $py = 'import nltk; nltk.data.find("tokenizers/punkt_tab/english"); nltk.data.find("tokenizers/punkt"); print("PUNKT_BAKED_OK")'
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $out = & $docker run --rm --entrypoint python $ImageRef -c $py 2>&1
+        $code = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $prev
+    }
+    $text = ($out | Out-String).Trim()
+    if ($code -ne 0 -or $text -notmatch "PUNKT_BAKED_OK") {
+        throw "NLTK punkt_tab/punkt not baked into $Label. whisperx.align() would 500 offline. Output: $text"
+    }
+    Write-Ok "$Label has NLTK tokenizers baked (punkt_tab + punkt)."
+}
+
 # --- Banner ---
 Write-Host ""
 Write-Host "Meeting Assistant - offline USB bundle build" -ForegroundColor Cyan
@@ -180,9 +207,11 @@ if ($drive) {
 }
 
 if (-not $SkipHostClient) {
-    $py = Get-Command py -ErrorAction SilentlyContinue
+    # Prefer py.exe explicitly; the bare "py" can be shadowed or unresolved on some PATHs.
+    $py = Get-Command py.exe -ErrorAction SilentlyContinue
+    if (-not $py) { $py = Get-Command py -ErrorAction SilentlyContinue }
     if (-not $py) {
-        Write-Warning "Python launcher 'py' not found - host client build may fail. Install Python 3.12."
+        Write-Warning "Python launcher 'py.exe' not found - host client build may fail. Install Python 3.12."
     } else {
         Write-Ok "Python launcher found: $($py.Source)"
     }
@@ -211,6 +240,10 @@ Invoke-DockerBuild -Label "CPU Whisper inference" `
     -Dockerfile "packaging/offline/images/Dockerfile.cpu" `
     -BuildArgs (Get-WhisperDockerBuildArgs) `
     -Tag $CpuImageTag
+
+# Fail fast if the tokenizers were dropped from a future preload/Dockerfile edit.
+Assert-PunktBaked -Label "GPU Whisper inference" -ImageRef $GpuImageTag
+Assert-PunktBaked -Label "CPU Whisper inference" -ImageRef $CpuImageTag
 
 Write-Step "Build Ollama image (base then derived model)"
 Invoke-DockerBuild -Label "Ollama summarization" `
@@ -246,7 +279,7 @@ if ($acceptScriptText -notmatch "Invoke-NativeCommand.*huggingface\.co") {
     throw "accept_offline_bundle.ps1 must probe huggingface.co via Invoke-NativeCommand."
 }
 Copy-Item (Join-Path $RepoRoot "packaging\offline\scripts\clean_install.ps1") (Join-Path $OutputDir "clean_install.ps1") -Force
-Copy-Item (Join-Path $RepoRoot "packaging\offline\README.md") (Join-Path $OutputDir "RUNBOOK.txt") -Force
+Copy-Item (Join-Path $RepoRoot "packaging\offline\RUNBOOK.txt") (Join-Path $OutputDir "RUNBOOK.txt") -Force
 Write-Ok "Operator scripts and compose files copied"
 
 $bundleRootEscaped = (Resolve-Path $OutputDir).Path

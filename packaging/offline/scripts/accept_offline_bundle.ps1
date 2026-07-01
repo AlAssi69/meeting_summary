@@ -187,6 +187,23 @@ try:
     print('HF_LOCAL_OK')
 except Exception as exc:
     print('HF_LOCAL_FAIL', type(exc).__name__, str(exc)[:120])
+# NLTK punkt_tab / punkt are fetched lazily at whisperx.align() time. Missing data is the
+# exact cause of the offline HTTP 500 (Resource 'punkt_tab' not found).
+try:
+    import nltk
+    nltk.data.find('tokenizers/punkt_tab/english')
+    nltk.data.find('tokenizers/punkt')
+    print('PUNKT_OK')
+except Exception as exc:
+    print('PUNKT_MISSING', type(exc).__name__, str(exc)[:120])
+# Load the forced-alignment model offline (baked by preload_models.py --stage align).
+try:
+    import whisperx
+    lang = (os.environ.get('MEETING_ASSISTANT_WHISPER_ALIGN_LANGUAGE') or 'ar').strip().lower()
+    whisperx.load_align_model(language_code=lang, device='cpu')
+    print('ALIGN_OK')
+except Exception as exc:
+    print('ALIGN_FAIL', type(exc).__name__, str(exc)[:160])
 '@
 
     $probeResult = Invoke-NativeCommand { $offlineProbe | & $docker exec -i $containerName python3 - }
@@ -203,6 +220,18 @@ except Exception as exc:
         Write-Pass "HF hub local_files_only blocked missing file without network (expected for probe repo)"
     } else {
         Write-Fail "HF offline probe unexpected: $probeText"
+        $failures++
+    }
+    if ($probeText -match "PUNKT_OK") {
+        Write-Pass "NLTK tokenizers baked (punkt_tab + punkt) - alignment will not 500 offline"
+    } else {
+        Write-Fail "NLTK punkt_tab/punkt missing - whisperx.align() will fail with HTTP 500 offline: $probeText"
+        $failures++
+    }
+    if ($probeText -match "ALIGN_OK") {
+        Write-Pass "Forced-alignment model loads offline (language=$($env:MEETING_ASSISTANT_WHISPER_ALIGN_LANGUAGE))"
+    } else {
+        Write-Fail "Alignment model failed to load offline: $probeText"
         $failures++
     }
 
@@ -284,6 +313,26 @@ try {
         $matched = ($names -contains $modelName) -or ($names -contains "$modelName`:latest")
         if ($matched) {
             Write-Pass "Ollama baked model present: $modelName"
+            # Generate smoke: prove the baked Gemma model actually loads and runs offline,
+            # not just that it appears in the tag list.
+            try {
+                $genBody = @{
+                    model       = $modelName
+                    prompt      = "ping"
+                    stream      = $false
+                    options     = @{ num_predict = 1 }
+                } | ConvertTo-Json -Compress
+                $gen = Invoke-RestMethod -Uri "$ollamaUrl/api/generate" -Method Post -Body $genBody -ContentType "application/json" -TimeoutSec ([Math]::Max($TimeoutSec, 120))
+                if ($null -ne $gen -and ($gen.PSObject.Properties.Name -contains "response")) {
+                    Write-Pass "Ollama model '$modelName' generated a response (loads and runs offline)"
+                } else {
+                    Write-Fail "Ollama generate returned no response for '$modelName': $($gen | ConvertTo-Json -Compress)"
+                    $failures++
+                }
+            } catch {
+                Write-Fail "Ollama generate smoke failed for '$modelName' - $_"
+                $failures++
+            }
         } else {
             Write-Fail "Configured Ollama model '$modelName' not baked in. Available: $($names -join ', ')"
             $failures++
@@ -292,6 +341,21 @@ try {
 } catch {
     Write-Fail "Ollama probe failed at $ollamaUrl - $_"
     $failures++
+}
+
+# --- 8. Restart policy (containers survive a host reboot without re-running install) ---
+$restartTargets = @()
+if ($containerName) { $restartTargets += $containerName }
+$ollamaName = if ($ollamaContainer) { ($ollamaContainer | Select-Object -First 1).Trim() } else { "" }
+if ($ollamaName) { $restartTargets += $ollamaName }
+foreach ($svc in $restartTargets) {
+    $policy = (& $docker inspect $svc --format "{{.HostConfig.RestartPolicy.Name}}" 2>$null | Out-String).Trim()
+    if ($policy -in @("unless-stopped", "always")) {
+        Write-Pass "Restart policy '$policy' on ${svc} (auto-starts with Docker Desktop after reboot)"
+    } else {
+        Write-Fail "Restart policy on ${svc} is '$policy' (expected unless-stopped) - will not auto-start after reboot"
+        $failures++
+    }
 }
 
 # --- Summary ---

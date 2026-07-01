@@ -1,0 +1,110 @@
+========================================================================
+ Meeting Assistant - Offline USB Bundle - RUNBOOK (target machine)
+========================================================================
+
+What this is:
+  A self-contained, offline install. Everything (Whisper speech-to-text,
+  the Gemma summarization model, and all libraries) is baked into Docker
+  images. No internet is needed on this machine.
+
+Prerequisite:
+  Docker Desktop installed and RUNNING (whale icon in the system tray).
+
+Run every command below in PowerShell.
+
+------------------------------------------------------------------------
+ STEP 1 - Copy the bundle to a local disk
+------------------------------------------------------------------------
+  Copy the ENTIRE bundle folder from the USB drive to this PC, e.g.:
+
+      C:\MeetingAssistantBundle
+
+  Do not run it directly from the USB drive.
+
+------------------------------------------------------------------------
+ STEP 2 - EDIT .env.bundle  (REQUIRED - do not skip)
+------------------------------------------------------------------------
+  Open ".env.bundle" (in the bundle folder) with Notepad.
+
+  Change these TWO lines so they point to THIS machine's bundle folder.
+  They are shipped with the build machine's paths and MUST be updated,
+  or install will create data in the wrong place (or fail).
+
+      MEETING_ASSISTANT_DATA_DIR=C:\MeetingAssistantBundle\data
+      MEETING_ASSISTANT_OUTPUT_ROOT=C:\MeetingAssistantBundle\meeting_outputs
+
+  Rules:
+    - Use the SAME folder where you copied the bundle in STEP 1.
+    - "\data" holds the app database; "\meeting_outputs" holds recordings,
+      transcripts, and summaries. These persist across restarts.
+    - Save the file (keep the name exactly ".env.bundle").
+
+------------------------------------------------------------------------
+ STEP 3 - Install (load images, start containers)
+------------------------------------------------------------------------
+      cd C:\MeetingAssistantBundle
+      .\install_from_usb.ps1
+
+  This loads the Docker images, auto-detects an NVIDIA GPU (falls back to
+  CPU if none), starts the two containers, and health-checks them.
+  First run takes several minutes while images load.
+
+  Force CPU:   .\install_from_usb.ps1 -ForceCpu
+
+------------------------------------------------------------------------
+ STEP 4 - Verify everything is correct
+------------------------------------------------------------------------
+      .\accept_offline_bundle.ps1
+
+  This must end with "All checks passed." It checks the Whisper model,
+  the alignment model, the NLTK tokenizers, the Gemma model, offline
+  guards, restart policy, and your data folders. Fix any [FAIL] before
+  using the app.
+
+  Optional full transcription test (uses a real audio file):
+      .\accept_offline_bundle.ps1 -TestAudioPath "C:\path\to\sample.wav"
+
+------------------------------------------------------------------------
+ STEP 5 - Launch the app
+------------------------------------------------------------------------
+      .\launch_host_client.ps1
+
+  If Windows SmartScreen warns about an unsigned app, choose
+  "More info" -> "Run anyway".
+
+========================================================================
+ AFTER A RESTART / REBOOT  (important - you do NOT reinstall)
+========================================================================
+  The containers are set to restart automatically. When Docker Desktop
+  starts, both "meeting-assistant-whisper" and "meeting-assistant-ollama"
+  come back on their own.
+
+  Just do this after a reboot:
+    1. Make sure Docker Desktop is running (open it if needed).
+       Tip: Docker Desktop -> Settings -> General -> "Start Docker Desktop
+       when you log in" so it launches automatically.
+    2. Run:  .\launch_host_client.ps1
+
+  You do NOT need to run install_from_usb.ps1 again. If a container is
+  stopped, you can also just press the Start (play) button next to it in
+  the Docker Desktop "Containers" screen.
+
+========================================================================
+ TROUBLESHOOTING
+========================================================================
+  - accept_offline_bundle.ps1 shows [FAIL]:
+        Read the failing line - it names the exact problem.
+
+  - "Docker CLI not found" / nothing starts:
+        Open Docker Desktop and wait until it says "running", then retry.
+
+  - App can't reach transcription/summary:
+        Confirm both containers are running in Docker Desktop, then
+        re-run:  .\accept_offline_bundle.ps1
+
+  - Start over cleanly (keeps your data):
+        .\clean_install.ps1
+        .\install_from_usb.ps1
+
+  (Developers: see README.md for build details and deeper docs.)
+========================================================================
